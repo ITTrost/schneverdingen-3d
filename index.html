@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Schneverdingen 3D</title>
+  <meta name="description" content="Interaktive 3D-Karte von Schneverdingen in der Lüneburger Heide: Orte suchen, Gebäude erkunden, Kartenebenen einblenden und einen Rundflug durch die Heide machen.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="map" aria-label="3D-Karte von Schneverdingen"></div>
+
+  <header class="brand panel">
+    <div class="brand-row">
+      <div>
+        <p class="eyebrow">Heideblütenstadt · Heidekreis</p>
+        <h1>Schneverdingen 3D</h1>
+      </div>
+      <button id="layers-toggle" class="icon-btn only-mobile" aria-controls="layers" aria-expanded="false" title="Kartenebenen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5Zm-7.6 9L2 13.2 12 18l10-4.8-2.4-1.2L12 15.6 4.4 12Zm0 4L2 17.2 12 22l10-4.8-2.4-1.2L12 19.6 4.4 16Z"/></svg>
+      </button>
+    </div>
+    <div class="search" role="search">
+      <label for="search-input" class="sr-only">Ort oder Adresse suchen</label>
+      <input id="search-input" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Ort oder Adresse suchen, z. B. Rathaus"
+             role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+      <ul id="search-results" role="listbox" hidden></ul>
+    </div>
+    <div class="quick">
+      <button id="tour-start" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <span>Heide-Tour<span class="long"> starten</span></span>
+      </button>
+      <button id="home-btn" class="btn"><span><span class="long">Zur </span>Stadtmitte</span></button>
+      <button id="pitch-btn" class="btn" title="Draufsicht">2D</button>
+    </div>
+  </header>
+
+  <aside id="layers" class="layers panel" aria-label="Kartenebenen">
+    <h2>Kartenebenen</h2>
+    <div id="layer-list" class="layer-list"></div>
+    <p id="hiking-status" class="hint" aria-live="polite"></p>
+  </aside>
+
+  <aside id="info" class="info panel" aria-live="polite" hidden>
+    <button id="info-close" class="icon-btn close" title="Schließen" aria-label="Info schließen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
+    </button>
+    <div id="info-body"></div>
+  </aside>
+
+  <section id="tour" class="tour panel" aria-label="Heide-Tour" hidden>
+    <div class="tour-head">
+      <p class="eyebrow"><span id="tour-kicker"></span> · <span id="tour-count"></span></p>
+      <h2 id="tour-title"></h2>
+    </div>
+    <p id="tour-text"></p>
+    <div class="tour-progress" aria-hidden="true"><span id="tour-bar"></span></div>
+    <div class="tour-controls">
+      <button id="tour-prev" class="btn">Zurück</button>
+      <button id="tour-play" class="btn">Pause</button>
+      <button id="tour-next" class="btn btn-primary">Weiter</button>
+      <button id="tour-stop" class="btn btn-quiet">Tour beenden</button>
+    </div>
+  </section>
+
+  <noscript><p class="noscript">Für die 3D-Karte wird JavaScript benötigt.</p></noscript>
+
+  <script src="vendor/maplibre-gl/maplibre-gl.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

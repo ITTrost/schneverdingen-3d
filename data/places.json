@@ -1,0 +1,14 @@
+[
+  { "name": "Rathaus", "kind": "Verwaltung", "lon": 9.7870262, "lat": 53.1198956, "zoom": 18, "aliases": ["Stadtverwaltung", "Schulstraße", "Stadtmitte", "Zentrum"] },
+  { "name": "Bahnhof Schneverdingen", "kind": "Bahn", "lon": 9.7986264, "lat": 53.1105547, "zoom": 17.5, "aliases": ["Heidebahn", "Zug", "Am Bahnhof"] },
+  { "name": "Heidegarten", "kind": "Garten", "lon": 9.7965398, "lat": 53.1291947, "zoom": 17, "aliases": ["Höpen", "Overbeckstraße"] },
+  { "name": "Höpen", "kind": "Heide", "lon": 9.7979475, "lat": 53.1343446, "zoom": 15.5, "aliases": ["Höpenheide"] },
+  { "name": "Segelfluggelände Höpen", "kind": "Flugplatz", "lon": 9.7906848, "lat": 53.1477558, "zoom": 15, "aliases": ["Segelflug", "Reinsehlener Weg"] },
+  { "name": "Heimathaus De Theeshof", "kind": "Museum", "lon": 9.7862425, "lat": 53.1300206, "zoom": 17.5, "aliases": ["Theeshof", "Hansahlener Dorfstraße"] },
+  { "name": "Eine-Welt-Kirche", "kind": "Kirche", "lon": 9.8095855, "lat": 53.1098698, "zoom": 18, "aliases": ["Ernst-Dax-Straße", "Expo"] },
+  { "name": "Camp Reinsehlen", "kind": "Ortsteil", "lon": 9.8208115, "lat": 53.144559, "zoom": 15.5, "aliases": ["Reinsehlen"] },
+  { "name": "Osterheide", "kind": "Heide", "lon": 9.8359026, "lat": 53.1141171, "zoom": 14, "aliases": ["Heber"] },
+  { "name": "Pietzmoor", "kind": "Moor", "lon": 9.8070738, "lat": 53.0913481, "zoom": 14.8, "aliases": ["Moor", "Langeloh"] },
+  { "name": "Hof Möhr", "kind": "Hof", "lon": 9.8490481, "lat": 53.0973674, "zoom": 16, "aliases": ["Möhr"] },
+  { "name": "Hof Tütsberg", "kind": "Hof", "lon": 9.9116064, "lat": 53.1127683, "zoom": 16, "aliases": ["Tütsberg"] }
+]

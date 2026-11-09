@@ -1,0 +1,56 @@
+[
+  {
+    "title": "Rathaus und Stadtmitte",
+    "kicker": "Start",
+    "text": "Das Rathaus an der Schulstraße liegt mitten im Ort. Von hier aus sind es gut zwei Kilometer bis zu den ersten großen Heideflächen am Höpen.",
+    "center": [9.7870262, 53.1198956], "zoom": 17.4, "pitch": 62, "bearing": -30
+  },
+  {
+    "title": "Heimathaus De Theeshof",
+    "kicker": "Ortsgeschichte",
+    "text": "Der Theeshof in Hansahlen ist das Heimathaus der Stadt. Die Hofanlage zeigt, wie in der Heide früher gebaut und gewirtschaftet wurde.",
+    "center": [9.7862425, 53.1300206], "zoom": 17.6, "pitch": 60, "bearing": 20
+  },
+  {
+    "title": "Heidegarten",
+    "kicker": "Am Höpen",
+    "text": "Im Heidegarten an der Overbeckstraße wachsen zahlreiche Heidesorten, die zu unterschiedlichen Zeiten im Jahr blühen. Er liegt am Rand der Heidefläche Höpen.",
+    "center": [9.7965398, 53.1291947], "zoom": 17.2, "pitch": 64, "bearing": 45
+  },
+  {
+    "title": "Höpen",
+    "kicker": "Heide am Stadtrand",
+    "text": "Nördlich des Heidegartens beginnt die offene Heide des Höpen. Im Spätsommer blüht hier die Besenheide lila. Weiter nördlich liegt das Segelfluggelände.",
+    "center": [9.7979475, 53.1343446], "zoom": 15.4, "pitch": 55, "bearing": 10
+  },
+  {
+    "title": "Camp Reinsehlen",
+    "kicker": "Ortsteil Insel",
+    "text": "Das Gelände bei Reinsehlen wurde früher militärisch genutzt. Heute gibt es hier Unterkünfte, Freizeitangebote und Zugänge in die umliegende Heide.",
+    "center": [9.8208115, 53.144559], "zoom": 15.6, "pitch": 55, "bearing": -20
+  },
+  {
+    "title": "Osterheide",
+    "kicker": "Weite Heide",
+    "text": "Die Osterheide ist eine der großen zusammenhängenden Heideflächen der Gemeinde. Teile davon gehörten zu den früheren militärischen Übungsflächen und sind wieder zu Heide geworden.",
+    "center": [9.8359026, 53.1141171], "zoom": 13.9, "pitch": 50, "bearing": 60
+  },
+  {
+    "title": "Pietzmoor",
+    "kicker": "Hochmoor",
+    "text": "Das Pietzmoor südlich der Stadt ist ein Hochmoor im Naturschutzgebiet Lüneburger Heide. Bohlenwege führen durch Wollgras, Torfmoos und kleine Moorseen.",
+    "center": [9.8070738, 53.0913481], "zoom": 14.7, "pitch": 52, "bearing": -10
+  },
+  {
+    "title": "Eine-Welt-Kirche",
+    "kicker": "Expo 2000",
+    "text": "Die Eine-Welt-Kirche entstand als Projekt zur Weltausstellung Expo 2000. In ihren Wänden ist Erde aus vielen Ländern der Welt verbaut.",
+    "center": [9.8095855, 53.1098698], "zoom": 17.8, "pitch": 62, "bearing": 30
+  },
+  {
+    "title": "Bahnhof",
+    "kicker": "Ziel",
+    "text": "Am Bahnhof hält die Heidebahn. Von hier aus geht es zurück in die Stadtmitte oder hinaus in die Heide.",
+    "center": [9.7986264, 53.1105547], "zoom": 17.2, "pitch": 60, "bearing": -45
+  }
+]
