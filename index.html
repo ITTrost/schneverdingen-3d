@@ -39,6 +39,12 @@
       <button id="home-btn" class="btn"><span><span class="long">Zur </span>Stadtmitte</span></button>
       <button id="pitch-btn" class="btn" title="Draufsicht">2D</button>
     </div>
+    <div class="daytime">
+      <label for="time-slider">Tageszeit</label>
+      <input id="time-slider" type="range" min="0" max="23.75" step="0.25" value="12">
+      <output id="time-label" for="time-slider">12:00</output>
+      <button id="time-now" class="btn btn-small" title="Aktuelle Uhrzeit in Schneverdingen">Jetzt</button>
+    </div>
   </header>
 
   <aside id="layers" class="layers panel" aria-label="Kartenebenen">
@@ -68,6 +74,8 @@
       <button id="tour-stop" class="btn btn-quiet">Tour beenden</button>
     </div>
   </section>
+
+  <p id="load-status" class="load-status" role="status" hidden>Gebäude werden geladen …</p>
 
   <noscript><p class="noscript">Für die 3D-Karte wird JavaScript benötigt.</p></noscript>
 

@@ -23,12 +23,13 @@ const TILE_CLASS_DE = {
 
 const RADIUS = 300;
 
-export function initInfo({ map, panel, body, closeBtn, onOpen }) {
+export function initInfo({ map, panel, body, closeBtn, onOpen, buildings }) {
   let seq = 0;
 
   const close = () => {
     panel.hidden = true;
     map.getSource('sv-selected')?.setData({ type: 'FeatureCollection', features: [] });
+    buildings?.select(null);
   };
   closeBtn.addEventListener('click', close);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) close(); });
@@ -134,26 +135,30 @@ export function initInfo({ map, panel, body, closeBtn, onOpen }) {
   }
 
   /** Panel für einen Punkt (und optional ein Gebäude-Feature) öffnen. */
-  async function show({ lngLat, feature, title }) {
+  async function show({ lngLat, feature, building, title }) {
     const my = ++seq;
-    highlight(feature, lngLat);
+    highlight(building ? null : feature, lngLat);
+    buildings?.select(building || null);
     onOpen?.();
     panel.hidden = false;
 
-    const h = feature?.properties?.render_height;
-    const levels = h ? Math.max(1, Math.round(h / 3)) : null;
+    const rec = building?.record;
+    const h = rec ? rec.h : feature?.properties?.render_height;
+    const levels = !rec && h ? Math.max(1, Math.round(h / 3)) : null;
+    if (rec && !title) title = rec.a || rec.f;
     const dRathaus = distance(lngLat, LANDMARKS.rathaus.lngLat);
     const dBahnhof = distance(lngLat, LANDMARKS.bahnhof.lngLat);
 
     body.innerHTML = `
-      <p class="eyebrow">${feature ? 'Gebäude' : 'Ort'}</p>
+      <p class="eyebrow">${rec ? escapeHtml(rec.f) : feature ? 'Gebäude' : 'Ort'}</p>
       <h2 class="title">${escapeHtml(title || 'Wird geladen …')}</h2>
       <p class="addr loading">Adresse wird gesucht …</p>
       <dl class="facts">
-        <div class="fact"><dt>Höhe</dt><dd>${h ? `ca. ${Math.round(h)} m` : '–'}</dd></div>
+        <div class="fact"><dt>Höhe</dt><dd>${h ? `${rec ? h.toLocaleString('de-DE') : `ca. ${Math.round(h)}`} m` : '–'}</dd></div>
         <div class="fact"><dt>Rathaus</dt><dd>${formatDistance(dRathaus)}</dd></div>
         <div class="fact"><dt>Bahnhof</dt><dd>${formatDistance(dBahnhof)}</dd></div>
       </dl>
+      ${rec ? `<p class="hint" style="margin:-6px 0 10px">${escapeHtml(rec.r || 'Dachform unbekannt')} · Daten: LGLN, 3D-Gebäudemodell LoD2</p>` : ''}
       ${levels ? `<p class="hint" style="margin:-6px 0 10px">Etwa ${levels} ${levels === 1 ? 'Geschoss' : 'Geschosse'} (geschätzt aus der Höhe)</p>` : ''}
       <div class="near"><p class="loading">Umgebung im Umkreis von ${RADIUS} m wird geladen …</p></div>`;
 
@@ -183,6 +188,11 @@ export function initInfo({ map, panel, body, closeBtn, onOpen }) {
 
   // Klick auf Gebäude
   map.on('click', (e) => {
+    const hit = buildings?.pick(e.point);
+    if (hit) {
+      show({ lngLat: hit.lngLat, building: hit });
+      return;
+    }
     const feats = map.queryRenderedFeatures(e.point, { layers: ['building-3d', 'building'].filter((id) => map.getLayer(id)) });
     if (!feats.length) return;
     show({ lngLat: [e.lngLat.lng, e.lngLat.lat], feature: feats[0] });
@@ -195,6 +205,8 @@ export function initInfo({ map, panel, body, closeBtn, onOpen }) {
   /** Gebäude am Punkt finden (nach einer Kamerafahrt). */
   function buildingAt(lngLat) {
     const pt = map.project(lngLat);
+    const hit = buildings?.pick(pt);
+    if (hit) return { building: hit };
     const feats = map.queryRenderedFeatures([[pt.x - 4, pt.y - 4], [pt.x + 4, pt.y + 4]],
       { layers: ['building-3d', 'building'].filter((id) => map.getLayer(id)) });
     return feats[0] || null;

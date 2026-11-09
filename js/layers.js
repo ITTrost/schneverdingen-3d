@@ -22,8 +22,12 @@ export const LAYERS = [
     layers: ['sv-aerial'],
   },
   {
-    id: 'buildings', name: '3D-Gebäude', desc: 'Höhen aus OpenStreetMap', swatch: '#d8c9ad', on: true,
-    layers: ['building-3d', 'sv-selected-3d'],
+    id: 'buildings', name: '3D-Gebäude', desc: 'LGLN-Gebäudemodell mit Dächern', swatch: 'linear-gradient(135deg,#9a3f2b 50%,#8e4a36 50%)', on: true,
+    layers: [],
+    toggle: (map, on, ctx) => {
+      ctx.buildings.setVisible(on);
+      if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', on ? 'none' : 'visible');
+    },
   },
   {
     id: 'heath', name: 'Heideflächen', desc: 'Besenheide und Zwergstrauchheide', swatch: '#a35aa0', on: true,
@@ -61,7 +65,7 @@ export const LAYERS = [
 ];
 
 /** Eigene Quellen und Ebenen in den geladenen Stil einbauen. */
-export function installLayers(map, gemeinde) {
+export function installLayers(map, gemeinde, buildings) {
   const style = map.getStyle();
   const firstRoad = style.layers.find((l) => l['source-layer'] === 'transportation')?.id;
   const firstSymbol = style.layers.find((l) => l.type === 'symbol')?.id;
@@ -74,15 +78,8 @@ export function installLayers(map, gemeinde) {
   // Natural-Earth-Relief wird bei Stadt-Zoom nicht gebraucht.
   if (map.getLayer('natural_earth')) map.removeLayer('natural_earth');
 
-  // Gebäude: warme Sandtöne nach Höhe, leicht transparent.
-  if (map.getLayer('building-3d')) {
-    map.setPaintProperty('building-3d', 'fill-extrusion-color', [
-      'interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 6],
-      0, '#eee6d6', 8, '#dfd1b7', 16, '#cdb994', 30, '#b49c74',
-    ]);
-    map.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.92);
-    map.setLayerZoomRange('building-3d', 13, 24);
-  }
+  // Die OSM-Klötzchen werden durch das LGLN-Gebäudemodell ersetzt (js/buildings.js).
+  if (map.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', 'none');
 
   // Luftbild (LGLN, Open Data)
   map.addSource('lgln-dop', {
@@ -203,6 +200,9 @@ export function installLayers(map, gemeinde) {
   map.addLayer({ id: 'sv-mask', type: 'fill', source: 'sv-mask',
     paint: { 'fill-color': '#c9c3b6', 'fill-opacity': 0.85, 'fill-antialias': false } });
   map.moveLayer('sv-boundary'); // Grenzlinie über der Abdeckung
+
+  // LGLN-Gebäude unter den Beschriftungen, damit Namen lesbar bleiben
+  map.addLayer(buildings.layer, firstSymbol);
 }
 
 let hikingState = 'idle';
@@ -239,10 +239,11 @@ async function loadHikingRoutes(map, setStatus) {
 }
 
 /** Panel mit Schaltern aufbauen. */
-export function buildLayerPanel(map, container, statusEl) {
+export function buildLayerPanel(map, container, statusEl, ctx) {
   const setStatus = (t) => { statusEl.textContent = t; };
   const apply = (def, on) => {
     for (const id of def.layers) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+    def.toggle?.(map, on, ctx);
     if (on && def.onEnable) def.onEnable(map, setStatus);
     if (!on && def.id === 'hiking') setStatus('');
   };

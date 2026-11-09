@@ -4,6 +4,9 @@ import { installLayers, buildLayerPanel } from './layers.js';
 import { initSearch } from './search.js';
 import { initInfo } from './info.js';
 import { initTour } from './tour.js';
+import { createBuildingLayer } from './buildings.js';
+import { initDaytime } from './daytime.js';
+import { initTrees } from './trees.js';
 
 const $ = (id) => document.getElementById(id);
 const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
@@ -39,7 +42,7 @@ map.addControl(new maplibregl.FullscreenControl(), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 map.addControl(new maplibregl.AttributionControl({
   compact: true,
-  customAttribution: 'Karte: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Suche: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>',
+  customAttribution: 'Gebäude: © <a href="https://opengeodata.lgln.niedersachsen.de" target="_blank" rel="noopener">GeoBasis-DE/LGLN</a> (CC BY 4.0) · Karte: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Suche: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>',
 }), 'bottom-right');
 
 const [places, stops, gemeinde] = await Promise.all([
@@ -53,9 +56,16 @@ map.once('load', () => {
   if (window.innerWidth < 760) document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
 });
 
+const buildings = createBuildingLayer({
+  onProgress: (n) => { $('load-status').hidden = n === 0; },
+});
+window.svBuildings = buildings;
+
 map.on('style.load', () => {
-  installLayers(map, gemeinde);
-  buildLayerPanel(map, $('layer-list'), $('hiking-status'));
+  installLayers(map, gemeinde, buildings);
+  buildLayerPanel(map, $('layer-list'), $('hiking-status'), { buildings });
+  initTrees(map, buildings);
+  initDaytime({ map, buildings, slider: $('time-slider'), label: $('time-label'), nowBtn: $('time-now') });
   setup();
 });
 
@@ -73,6 +83,7 @@ function setup() {
     panel: $('info'),
     body: $('info-body'),
     closeBtn: $('info-close'),
+    buildings,
     onOpen: () => { if (isMobile()) setLayersOpen(false); },
   });
 
@@ -91,8 +102,10 @@ function setup() {
         map.flyTo({ ...cam, duration: 2500 });
       }
       map.once('moveend', () => {
-        const feature = info.buildingAt(r.lngLat);
-        info.show({ lngLat: r.lngLat, feature, title: r.name });
+        const found = info.buildingAt(r.lngLat);
+        info.show(found?.building
+          ? { lngLat: r.lngLat, building: found.building, title: r.name }
+          : { lngLat: r.lngLat, feature: found, title: r.name });
       });
     },
   });

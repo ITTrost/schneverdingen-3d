@@ -106,6 +106,26 @@ h2 { font-size: 18px; line-height: 1.2; }
 .icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
 button:focus-visible, input:focus-visible { outline: 3px solid var(--heide); outline-offset: 2px; }
 
+/* ---------- Tageszeit ---------- */
+.daytime {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
+  padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.daytime output {
+  font: 700 15px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--ink); min-width: 3.2em; text-align: right;
+}
+.daytime input[type="range"] { width: 100%; min-width: 0; accent-color: var(--heide); }
+.btn-small { padding: 6px 10px; font-size: 12.5px; }
+
+.load-status {
+  position: fixed; z-index: 4; left: 50%; transform: translateX(-50%);
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  margin: 0; padding: 6px 12px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+  font-size: 13px; color: var(--muted);
+}
+
 /* ---------- Suche ---------- */
 .search { position: relative; }
 .search input {
