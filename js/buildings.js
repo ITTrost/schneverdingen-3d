@@ -3,6 +3,8 @@
 import * as THREE from '../vendor/three/three.module.min.js';
 
 const DATA = 'data/lod2/';
+export const EXAG = 4;
+export const REF = 30; // Bezugshöhe m NHN: Höhen werden ab hier gerechnet, damit sie in Int16 passen // Überhöhung des Geländes – muss zu terrain.exaggeration in main.js passen
 const R = 6371008.8;
 
 const VERT = /* glsl */ `
@@ -15,6 +17,8 @@ in vec4 aNormal;
 in vec4 aInfo;
 in float aU;
 in float aBid;
+in float aBase;
+uniform float uExag;
 out vec3 vN;
 out vec3 vP;
 out float vU;
@@ -23,6 +27,7 @@ out float vBid;
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vP = wp.xyz;
+  vP.z -= (aBase * 0.1 - 30.0) * uExag; // Höhe über dem Gebäudegrund (30 = REF)
   vN = aNormal.xyz;
   vU = aU * 0.1;
   vInfo = aInfo;
@@ -198,6 +203,7 @@ export function createBuildingLayer({ onProgress } = {}) {
     uSky: { value: new THREE.Color(0.6, 0.66, 0.74) },
     uGround: { value: new THREE.Color(0.42, 0.4, 0.35) },
     uNight: { value: 0 },
+    uExag: { value: EXAG },
     uSelTile: { value: -1 },
     uSel: { value: -1 },
   };
@@ -256,6 +262,9 @@ export function createBuildingLayer({ onProgress } = {}) {
       const info = take(Uint8Array, n * 4);
       const u = take(Int16Array, n);
       const bid = take(Uint16Array, n);
+      const base = take(Int16Array, n);
+      // Geländehöhe (überhöht) direkt in die Positionen einrechnen, damit auch das Anklicken stimmt
+      for (let i = 0; i < n; i++) pos[i * 3 + 2] += Math.round(((base[i] * 0.1 - REF) * EXAG) / q);
       if (n > 65535 && off % 4) off += 4 - (off % 4); // Uint32-Indizes sind ausgerichtet
       const idx = n > 65535 ? take(Uint32Array, ni) : take(Uint16Array, ni);
 
@@ -265,6 +274,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       geo.setAttribute('aInfo', new THREE.BufferAttribute(info, 4));
       geo.setAttribute('aU', new THREE.BufferAttribute(u, 1));
       geo.setAttribute('aBid', new THREE.BufferAttribute(bid, 1));
+      geo.setAttribute('aBase', new THREE.BufferAttribute(base, 1));
       geo.setIndex(new THREE.BufferAttribute(idx, 1));
       geo.computeBoundingSphere();
       const mat = new THREE.RawShaderMaterial({
@@ -328,7 +338,9 @@ export function createBuildingLayer({ onProgress } = {}) {
     render(gl, matrix) {
       if (!o || !visible) return;
       const m = new THREE.Matrix4().fromArray(matrix);
-      const t = new THREE.Matrix4().makeTranslation(o[0], o[1], 0)
+      // Mit Gelände verschiebt MapLibre die Welt um die Höhe der Kartenmitte nach unten
+      const elev = map.transform.elevation || 0;
+      const t = new THREE.Matrix4().makeTranslation(o[0], o[1], (REF * EXAG - elev) * meter)
         .scale(new THREE.Vector3(meter, -meter, meter));
       camera.projectionMatrix = m.multiply(t);
       camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
@@ -390,7 +402,7 @@ export function createBuildingLayer({ onProgress } = {}) {
         const colors = new Float32Array(items.length * 3);
         items.forEach((t, i) => {
           q.setFromAxisAngle(zAxis, t.rot);
-          m4.compose(new THREE.Vector3(t.x, t.y, 0), q, new THREE.Vector3(t.h, t.h, t.h));
+          m4.compose(new THREE.Vector3(t.x, t.y, (t.z || 0) - 0.6), q, new THREE.Vector3(t.h, t.h, t.h));
           mesh.setMatrixAt(i, m4);
           const c = kind === 'pine' ? [0.16, 0.27, 0.17] : [0.24, 0.38, 0.18];
           colors.set(c.map((v) => v * (0.8 + t.shade * 0.4)), i * 3);
@@ -405,6 +417,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       map?.triggerRepaint();
     },
     toLocal: (lng, lat) => toLocal(lng, lat),
+    toLngLat: (x, y) => toLngLat(x, y),
     setVisible(v) {
       visible = v;
       for (const t of tiles.values()) if (t.mesh) t.mesh.visible = v;

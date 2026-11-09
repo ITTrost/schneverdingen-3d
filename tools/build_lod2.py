@@ -2,7 +2,10 @@
 """LoD2-Gebäudemodelle des LGLN (CityGML) in kompakte Binärkacheln für den Browser umwandeln.
 
 Aufruf:
-    python3 tools/build_lod2.py <ordner-mit-gml> data/lod2
+    python3 tools/build_lod2.py <ordner-mit-gml> data/lod2 [<dem.npz>]
+
+Mit dem Höhenraster aus tools/build_dem.py bekommt jedes Gebäude seine Geländehöhe
+(aus demselben Raster wie die Geländekacheln, damit Gebäude und Gelände zusammenpassen).
 
 Quelle: LGLN, 3D-Gebäudemodelle LoD2, https://opengeodata.lgln.niedersachsen.de (CC BY 4.0)
 Kacheln: https://lod2.opengeodata.lgln.niedersachsen.de/LoD2_32_<E>_<N>_1_ni.gml
@@ -169,8 +172,28 @@ def surfaces(bel):
     return out, grounds
 
 
-def build_tile(path):
-    verts, norms, info, us, bids, tris = [], [], [], [], [], []
+class Dem:
+    def __init__(self, path):
+        d = np.load(path)
+        self.z, self.e0, self.n1, self.res = d['z'], float(d['e0']), float(d['n1']), float(d['res'])
+
+    def at(self, e, n):
+        c = (e - self.e0) / self.res - 0.5
+        r = (self.n1 - n) / self.res - 0.5
+        c0, r0 = int(np.floor(c)), int(np.floor(r))
+        fc, fr = c - c0, r - r0
+        z = self.z
+        c0 = min(max(c0, 0), z.shape[1] - 2)
+        r0 = min(max(r0, 0), z.shape[0] - 2)
+        return float((z[r0, c0] * (1 - fc) + z[r0, c0 + 1] * fc) * (1 - fr)
+                     + (z[r0 + 1, c0] * (1 - fc) + z[r0 + 1, c0 + 1] * fc) * fr)
+
+
+SKIRT = 4.0  # Wände so weit unter den Boden ziehen, dass an Hängen keine Lücken entstehen
+
+
+def build_tile(path, dem=None):
+    verts, norms, info, us, bids, tris, bases = [], [], [], [], [], [], []
     records = []
     nverts = 0
     for _, bel in etree.iterparse(path, tag=B + 'Building'):
@@ -184,6 +207,13 @@ def build_tile(path):
         ground = min(g[:, 2].min() for g in grounds) if grounds else allz.min()
         top = allz.max()
         rec = building_record(bel)
+        if grounds:
+            gc = np.concatenate(grounds)
+            ge, gn = float(gc[:, 0].mean()), float(gc[:, 1].mean())
+        else:
+            ge, gn = float(polys[0][1][:, 0].mean()), float(polys[0][1][:, 1].mean())
+        base = dem.at(ge, gn) if dem else 0.0
+        rec['z'] = round(float(ground), 1)  # Bodenhöhe m NHN laut LoD2
         if rec['h'] is None:
             rec['h'] = round(float(top - ground), 1)
         bid = len(records)
@@ -196,6 +226,9 @@ def build_tile(path):
             tri, n, ring2 = triangulate(loc)
             if tri is None:
                 continue
+            if kind == 0:
+                ring2 = ring2.copy()
+                ring2[ring2[:, 2] < 0.05, 2] = -SKIRT
             # Fassadenkoordinate u: Abstand entlang der Wand (horizontal)
             if kind == 0:
                 d = np.array([-n[1], n[0]])
@@ -211,6 +244,7 @@ def build_tile(path):
             info.append(np.repeat(np.array([[kind, seed, flags, 0]], dtype=np.uint8), len(ring2), axis=0))
             us.append(u)
             bids.append(np.full(len(ring2), bid, dtype=np.uint16))
+            bases.append(np.full(len(ring2), round(base * 10), dtype=np.int16))
             tris.append(tri + nverts)
             nverts += len(ring2)
         bel.clear()
@@ -222,13 +256,15 @@ def build_tile(path):
     return {
         'pos': V, 'nrm': np.concatenate(norms), 'info': np.concatenate(info),
         'u': np.concatenate(us), 'bid': np.concatenate(bids), 'idx': np.concatenate(tris).astype(np.uint32),
+        'base': np.concatenate(bases),
     }, records
 
 
 def write_tile(geo, out_bin):
     """Binärformat (little endian):
     Kopf: 'SV3D', uint32 nVerts, uint32 nIdx, float32 cx, cy (Kachelmitte, lokale Meter), float32 quant
-    Daten: int16[3n] pos, int8[4n] normal, uint8[4n] info, int16[n] u (dm), uint16[n] bid,
+    Daten: int16[3n] pos (z über Gebäudegrund), int8[4n] normal, uint8[4n] info, int16[n] u (dm),
+          uint16[n] bid, int16[n] Geländehöhe (dm NHN),
           [Auffüllung auf 4 Byte, nur bei uint32], uint16|uint32[nIdx] idx
     """
     V = geo['pos']
@@ -249,6 +285,7 @@ def write_tile(geo, out_bin):
         f.write(geo['info'].tobytes())
         f.write(u.tobytes())
         f.write(geo['bid'].tobytes())
+        f.write(geo['base'].tobytes())
         if big:
             f.write(b'\0' * ((-f.tell()) % 4))  # Uint32-Indizes auf 4 Byte ausrichten
         f.write(idx.astype(np.uint32 if big else np.uint16).tobytes())
@@ -259,6 +296,7 @@ def write_tile(geo, out_bin):
 
 def main():
     src, dst = sys.argv[1], sys.argv[2]
+    dem = Dem(sys.argv[3]) if len(sys.argv) > 3 else None
     os.makedirs(dst, exist_ok=True)
     index = []
     files = sorted(glob.glob(os.path.join(src, 'LoD2_32_*_1_ni.gml')))
@@ -266,7 +304,7 @@ def main():
         name = os.path.basename(path)
         e, n = name.split('_')[2:4]
         key = f'{e}_{n}'
-        geo, records = build_tile(path)
+        geo, records = build_tile(path, dem)
         if geo is None:
             continue
         c = write_tile(geo, os.path.join(dst, key + '.bin'))

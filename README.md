@@ -6,6 +6,7 @@ Interaktive 3D-Karte von Schneverdingen in der Lüneburger Heide. Sie läuft kom
 
 - **Auf Schneverdingen begrenzt:** Die Karte zeigt das Gemeindegebiet und etwa 2 km darum herum. Weiter lässt sie sich nicht verschieben oder herauszoomen. Alles außerhalb der Gemeindegrenze ist blass überdeckt. Die Grenzen dafür stehen in `js/main.js` (`minZoom`, `maxBounds`).
 - **3D-Stadtmodell:** alle rund 24.700 Gebäude der Gemeinde aus dem amtlichen LoD2-Gebäudemodell des LGLN, mit echten Dachformen (Sattel-, Walm-, Krüppelwalmdach …). Fassaden in Klinker und Putz, Fenster, Ziegel- und Anthrazitdächer
+- **Gelände:** echtes Relief aus dem amtlichen Geländemodell DGM1 des LGLN, 4-fach überhöht, damit die flachen Heide-Hügel (29–157 m ü. NN) sichtbar werden. Dazu eine kräftige Reliefschattierung (Ebene „Relief“). Gebäude und Bäume stehen auf dem Gelände
 - **Tageszeit:** Schieberegler mit dem echten Sonnenstand für Schneverdingen. Abends wird das Licht golden, nachts leuchten Fenster und Straßen. „Jetzt“ springt zur aktuellen Uhrzeit
 - **Bäume:** Wälder, Parks, Gärten und Heideflächen werden mit Kiefern und Laubbäumen bepflanzt, berechnet aus den Kartendaten
 - **Suche:** bekannte Orte (Rathaus, Heidegarten, Pietzmoor …) und jede Adresse in der Gemeinde
@@ -37,6 +38,7 @@ Dann <http://localhost:8000> öffnen. Ein Doppelklick auf `index.html` reicht ni
 | `data/places.json` | Orte, die die Suche zuerst vorschlägt, mit Suchbegriffen (`aliases`) |
 | `data/gemeindegrenze.geojson` | Gemeindegrenze (aus OpenStreetMap) |
 | `data/lod2/` | Gebäude als Binärkacheln (1 × 1 km), erzeugt mit `tools/build_lod2.py` |
+| `data/dem/`, `data/relief/` | Geländehöhen (Terrain-RGB) und Reliefschattierung, erzeugt mit `tools/build_dem.py` |
 | `js/buildings.js` | Darstellung der Gebäude und Bäume (Three.js), Farben der Fassaden und Dächer im Shader |
 | `js/layers.js` | Kartenebenen und ihre Farben |
 | `css/style.css` | Farben und Schriften (oben im `:root`-Block) |
@@ -58,11 +60,24 @@ cd .. && python3 tools/build_lod2.py gml data/lod2
 
 Die Kachelnamen lauten `LoD2_32_<Ostwert km>_<Nordwert km>_1_ni.gml` (UTM Zone 32). Für Schneverdingen sind es die Ostwerte 541–562 und die Nordwerte 5876–5897. Verwendet werden nur die Kacheln, die die Gemeinde berühren (194 Stück). Die CityGML-Dateien selbst (über 500 MB) liegen nicht im Repository.
 
+### Gelände
+
+Das LGLN bietet das DGM1 über einen WMS an, allerdings nur als 8-Bit-Graustufenbild. `tools/build_dem.py` lädt es in 10-m-Auflösung, rechnet die Grauwerte in Höhen um und glättet die Stufen. Die Umrechnungstabelle ist an den Bodenhöhen der LoD2-Gebäude kalibriert, die Abweichung liegt bei 0,6 m. Danach müssen die Gebäude mit dem Höhenraster neu umgewandelt werden:
+
+```bash
+pip install scipy pillow
+python3 tools/build_dem.py arbeitsordner data/dem
+python3 tools/build_lod2.py gml data/lod2 arbeitsordner/dem.npz
+```
+
+Die Überhöhung steht in `js/buildings.js` (`EXAG`). Mehr als 4,5-fach geht nicht, ohne das Datenformat zu ändern.
+
 ## Datenquellen und Lizenzen
 
 | Daten | Quelle | Lizenz |
 |---|---|---|
 | Karte, Gebäude, Wege, Flächen | © [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkende über [OpenFreeMap](https://openfreemap.org) / [OpenMapTiles](https://openmaptiles.org) | ODbL |
+| Gelände (DGM1) | © GeoBasis-DE/LGLN, [DGM1-WMS](https://opendata.lgln.niedersachsen.de/doorman/noauth/dgm_wms?SERVICE=WMS&REQUEST=GetCapabilities) | CC BY 4.0 |
 | 3D-Gebäude (LoD2) | © GeoBasis-DE/LGLN, [OpenGeoData.NI](https://opengeodata.lgln.niedersachsen.de) | CC BY 4.0 |
 | Luftbild (DOP20) | © GeoBasis-DE/LGLN, [OpenGeoData.NI](https://ni-lgln-opengeodata.hub.arcgis.com/) | CC BY 4.0 |
 | Adresssuche | [Photon](https://photon.komoot.io) von komoot, OSM-Daten | ODbL |

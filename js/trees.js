@@ -1,9 +1,11 @@
 // Bäume aus den Kartendaten erzeugen: Wälder dicht, Parks und Gärten locker, Heide mit einzelnen Kiefern.
 // Positionen sind zufällig, aber stabil (gleiche Stelle -> gleicher Baum).
+import { EXAG, REF } from './buildings.js';
 
 const SRC = 'openmaptiles';
 const MAX_TREES = 32000;
-const RADIUS = 1600; // Meter um die Kartenmitte
+const NEAR = 1600; // Meter um die Kartenmitte, volle Dichte
+const FAR = 3800;  // bei weiter Sicht: größerer Umkreis, lockerer
 
 function hash(x, y, s = 0) {
   let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(s, 1442695041);
@@ -54,14 +56,18 @@ export function initTrees(map, buildings) {
   let timer;
 
   function generate() {
-    if (map.getZoom() < 14) {
+    const zoom = map.getZoom();
+    const far = zoom < 14.5;
+    const RADIUS = far ? FAR : NEAR;
+    const sparse = far ? 1.9 : 1; // Abstand der Bäume bei weiter Sicht vergrößern
+    if (zoom < 12.8) {
       if (last) { buildings.setTrees([]); last = null; }
       return;
     }
     const c = map.getCenter();
     const [cx, cy] = buildings.toLocal(c.lng, c.lat);
-    if (last && Math.hypot(cx - last[0], cy - last[1]) < 450) return;
-    last = [cx, cy];
+    if (last && last[2] === far && Math.hypot(cx - last[0], cy - last[1]) < (far ? 900 : 450)) return;
+    last = [cx, cy, far];
 
     const local = (ring) => ring.map(([lng, lat]) => buildings.toLocal(lng, lat));
     const near = (ring) => ring.some(([x, y]) => Math.abs(x - cx) < RADIUS * 1.3 && Math.abs(y - cy) < RADIUS * 1.3);
@@ -115,7 +121,7 @@ export function initTrees(map, buildings) {
       if (!near(lr[0])) continue;
       const xs = lr[0].map((p) => p[0]);
       const ys = lr[0].map((p) => p[1]);
-      const s = spec.step;
+      const s = Math.round(spec.step * sparse);
       const x0 = Math.max(Math.min(...xs), cx - RADIUS);
       const x1 = Math.min(Math.max(...xs), cx + RADIUS);
       const y0 = Math.max(Math.min(...ys), cy - RADIUS);
@@ -144,7 +150,14 @@ export function initTrees(map, buildings) {
       }
     }
     trees.sort((a, b) => a.d - b.d);
-    buildings.setTrees(trees.slice(0, MAX_TREES));
+    const chosen = trees.slice(0, MAX_TREES);
+    // Geländehöhe (überhöht, absolut) wie bei den Gebäuden
+    const center = map.transform.elevation || 0;
+    for (const t of chosen) {
+      const e = map.queryTerrainElevation(buildings.toLngLat(t.x, t.y));
+      t.z = e == null ? 0 : e + center - REF * EXAG; // gleiche Bezugshöhe wie die Gebäude
+    }
+    buildings.setTrees(chosen);
   }
 
   const schedule = () => { clearTimeout(timer); timer = setTimeout(generate, 250); };

@@ -158,7 +158,7 @@ export function initInfo({ map, panel, body, closeBtn, onOpen, buildings }) {
         <div class="fact"><dt>Rathaus</dt><dd>${formatDistance(dRathaus)}</dd></div>
         <div class="fact"><dt>Bahnhof</dt><dd>${formatDistance(dBahnhof)}</dd></div>
       </dl>
-      ${rec ? `<p class="hint" style="margin:-6px 0 10px">${escapeHtml(rec.r || 'Dachform unbekannt')} · Daten: LGLN, 3D-Gebäudemodell LoD2</p>` : ''}
+      ${rec ? `<p class="hint" style="margin:-6px 0 10px">${escapeHtml(rec.r || 'Dachform unbekannt')}${rec.z != null ? ` · Gelände ${rec.z.toLocaleString('de-DE')} m ü. NN` : ''} · Daten: LGLN, 3D-Gebäudemodell LoD2</p>` : ''}
       ${levels ? `<p class="hint" style="margin:-6px 0 10px">Etwa ${levels} ${levels === 1 ? 'Geschoss' : 'Geschosse'} (geschätzt aus der Höhe)</p>` : ''}
       <div class="near"><p class="loading">Umgebung im Umkreis von ${RADIUS} m wird geladen …</p></div>`;
 

@@ -30,6 +30,10 @@ export const LAYERS = [
     },
   },
   {
+    id: 'relief', name: 'Relief', desc: 'Geländeschattierung aus dem DGM1', swatch: 'linear-gradient(135deg,#fffaf0,#6b5a48)', on: true,
+    layers: ['sv-hillshade'],
+  },
+  {
     id: 'heath', name: 'Heideflächen', desc: 'Besenheide und Zwergstrauchheide', swatch: '#a35aa0', on: true,
     layers: ['sv-heath', 'sv-heath-line'],
   },
@@ -200,6 +204,7 @@ export function installLayers(map, gemeinde, buildings) {
   map.addLayer({ id: 'sv-mask', type: 'fill', source: 'sv-mask',
     paint: { 'fill-color': '#c9c3b6', 'fill-opacity': 0.85, 'fill-antialias': false } });
   map.moveLayer('sv-boundary'); // Grenzlinie über der Abdeckung
+  if (map.getLayer('sv-hillshade')) map.moveLayer('sv-hillshade', firstRoad); // Relief über Heide, Wald und Wiesen
 
   // LGLN-Gebäude unter den Beschriftungen, damit Namen lesbar bleiben
   map.addLayer(buildings.layer, firstSymbol);

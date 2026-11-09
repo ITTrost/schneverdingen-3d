@@ -4,7 +4,7 @@ import { installLayers, buildLayerPanel } from './layers.js';
 import { initSearch } from './search.js';
 import { initInfo } from './info.js';
 import { initTour } from './tour.js';
-import { createBuildingLayer } from './buildings.js';
+import { createBuildingLayer, EXAG } from './buildings.js';
 import { initDaytime } from './daytime.js';
 import { initTrees } from './trees.js';
 
@@ -61,7 +61,28 @@ const buildings = createBuildingLayer({
 });
 window.svBuildings = buildings;
 
+function addTerrain() {
+  // Gelände aus dem DGM1 des LGLN (tools/build_dem.py), leicht überhöht, damit die Heide-Hügel sichtbar werden
+  const dem = {
+    type: 'raster-dem',
+    tiles: [new URL('data/dem/{z}/{x}/{y}.png', window.location.href).href.replace(/%7B/g, '{').replace(/%7D/g, '}')],
+    encoding: 'mapbox', tileSize: 256, minzoom: 10, maxzoom: 13, bounds: [9.58, 53.0, 9.99, 53.25],
+    attribution: 'Gelände: © GeoBasis-DE/LGLN (CC BY 4.0)',
+  };
+  map.addSource('sv-dem', dem);
+  map.setTerrain({ source: 'sv-dem', exaggeration: EXAG });
+  // Reliefschattierung, vorberechnet aus dem DGM1 (5-fach verstärkt, Licht aus Nordwest)
+  map.addSource('sv-relief', {
+    type: 'raster',
+    tiles: [dem.tiles[0].replace('/dem/', '/relief/')],
+    tileSize: 256, minzoom: 10, maxzoom: 13, bounds: dem.bounds,
+  });
+  const firstRoad = map.getStyle().layers.find((l) => l['source-layer'] === 'transportation')?.id;
+  map.addLayer({ id: 'sv-hillshade', type: 'raster', source: 'sv-relief', paint: { 'raster-opacity': 0.9, 'raster-fade-duration': 150 } }, firstRoad);
+}
+
 map.on('style.load', () => {
+  addTerrain();
   installLayers(map, gemeinde, buildings);
   buildLayerPanel(map, $('layer-list'), $('hiking-status'), { buildings });
   initTrees(map, buildings);
