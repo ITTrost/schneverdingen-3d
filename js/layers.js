@@ -55,13 +55,13 @@ export const LAYERS = [
     onEnable: loadHikingRoutes,
   },
   {
-    id: 'boundary', name: 'Gemeindegrenze', desc: 'Stadtgebiet Schneverdingen', swatch: '#8d3f8a', on: false,
+    id: 'boundary', name: 'Gemeindegrenze', desc: 'Stadtgebiet Schneverdingen', swatch: '#8d3f8a', on: true,
     layers: ['sv-boundary'],
   },
 ];
 
 /** Eigene Quellen und Ebenen in den geladenen Stil einbauen. */
-export function installLayers(map) {
+export function installLayers(map, gemeinde) {
   const style = map.getStyle();
   const firstRoad = style.layers.find((l) => l['source-layer'] === 'transportation')?.id;
   const firstSymbol = style.layers.find((l) => l.type === 'symbol')?.id;
@@ -124,7 +124,7 @@ export function installLayers(map) {
   add({ id: 'sv-reserve-line', type: 'line', source: SRC, 'source-layer': 'park',
     paint: { 'line-color': '#2e6b3f', 'line-width': 2.2, 'line-dasharray': [3, 2], 'line-opacity': 0.85 } });
 
-  map.addSource('sv-gemeinde', { type: 'geojson', data: 'data/gemeindegrenze.geojson' });
+  map.addSource('sv-gemeinde', { type: 'geojson', data: gemeinde });
   add({ id: 'sv-boundary', type: 'line', source: 'sv-gemeinde',
     paint: { 'line-color': '#8d3f8a', 'line-width': 3, 'line-dasharray': [4, 2, 1, 2], 'line-opacity': 0.9 } },
   firstSymbol);
@@ -181,6 +181,28 @@ export function installLayers(map) {
     } }, firstSymbol);
   map.addLayer({ id: 'sv-selected-line', type: 'line', source: 'sv-selected',
     paint: { 'line-color': '#8d3f8a', 'line-width': 3 } }, firstSymbol);
+
+  // Alles außerhalb der Gemeinde blass überdecken (oberste Ebene, auch über Beschriftungen).
+  // MapLibre erkennt Löcher nur an der Drehrichtung: Außenringe gegen, Löcher im Uhrzeigersinn.
+  const area = (ring) => ring.reduce((s, [x1, y1], i) => {
+    const [x2, y2] = ring[(i + 1) % ring.length];
+    return s + (x1 * y2 - x2 * y1);
+  }, 0);
+  const ccw = (ring) => (area(ring) > 0 ? ring : [...ring].reverse());
+  const cw = (ring) => (area(ring) < 0 ? ring : [...ring].reverse());
+  const polys = gemeinde.features.flatMap((f) => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates));
+  const outer = ccw([[8.9, 52.6], [10.7, 52.6], [10.7, 53.7], [8.9, 53.7], [8.9, 52.6]]);
+  const mask = [
+    [outer, ...polys.map((p) => cw(p[0]))], // Welt mit der Gemeinde als Loch
+    ...polys.flatMap((p) => p.slice(1)).map((enclave) => [ccw(enclave)]), // Enklaven gehören nicht dazu
+  ];
+  map.addSource('sv-mask', {
+    type: 'geojson',
+    data: { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: mask } },
+  });
+  map.addLayer({ id: 'sv-mask', type: 'fill', source: 'sv-mask',
+    paint: { 'fill-color': '#c9c3b6', 'fill-opacity': 0.85, 'fill-antialias': false } });
+  map.moveLayer('sv-boundary'); // Grenzlinie über der Abdeckung
 }
 
 let hikingState = 'idle';

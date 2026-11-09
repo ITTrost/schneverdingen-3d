@@ -4,6 +4,7 @@ Interaktive 3D-Karte von Schneverdingen in der Lüneburger Heide. Sie läuft kom
 
 **Funktionen**
 
+- **Auf Schneverdingen begrenzt:** Die Karte zeigt das Gemeindegebiet und etwa 2 km darum herum. Weiter lässt sie sich nicht verschieben oder herauszoomen. Alles außerhalb der Gemeindegrenze ist blass überdeckt. Die Grenzen dafür stehen in `js/main.js` (`minZoom`, `maxBounds`).
 - **3D-Stadtmodell:** Gebäude mit Höhen aus OpenStreetMap, frei dreh- und neigbar
 - **Suche:** bekannte Orte (Rathaus, Heidegarten, Pietzmoor …) und jede Adresse in der Gemeinde
 - **Gebäude-Info:** Klick auf ein Gebäude zeigt Adresse, Höhe, Entfernung zu Rathaus und Bahnhof sowie Haltestellen, Cafés, Geschäfte usw. im Umkreis von 300 m

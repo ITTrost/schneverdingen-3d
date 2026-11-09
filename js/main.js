@@ -16,8 +16,9 @@ const map = new maplibregl.Map({
   pitch: HOME.pitch,
   bearing: HOME.bearing,
   maxPitch: 80,
-  minZoom: 10,
-  maxBounds: [[BBOX[0] - 0.25, BBOX[1] - 0.15], [BBOX[2] + 0.25, BBOX[3] + 0.15]],
+  // Nur Schneverdingen: Gemeindegebiet plus etwa 2 km Rand, nicht weiter herauszoomen
+  minZoom: 11.5,
+  maxBounds: [[BBOX[0] - 0.03, BBOX[1] - 0.02], [BBOX[2] + 0.03, BBOX[3] + 0.02]],
   hash: 'karte',
   attributionControl: false,
   locale: {
@@ -41,9 +42,10 @@ map.addControl(new maplibregl.AttributionControl({
   customAttribution: 'Karte: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Suche: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>',
 }), 'bottom-right');
 
-const [places, stops] = await Promise.all([
+const [places, stops, gemeinde] = await Promise.all([
   fetch('data/places.json').then((r) => r.json()),
   fetch('data/tour.json').then((r) => r.json()),
+  fetch('data/gemeindegrenze.geojson').then((r) => r.json()),
 ]);
 
 // Kompakte Quellenangabe auf schmalen Bildschirmen zugeklappt starten
@@ -52,7 +54,7 @@ map.once('load', () => {
 });
 
 map.on('style.load', () => {
-  installLayers(map);
+  installLayers(map, gemeinde);
   buildLayerPanel(map, $('layer-list'), $('hiking-status'));
   setup();
 });
