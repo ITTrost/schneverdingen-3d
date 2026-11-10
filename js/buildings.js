@@ -18,7 +18,9 @@ in vec4 aInfo;
 in float aU;
 in float aBid;
 in float aBase;
+in vec2 aUv;
 uniform float uExag;
+out vec2 vUv;
 out vec3 vN;
 out vec3 vP;
 out float vU;
@@ -32,6 +34,7 @@ void main() {
   vU = aU * 0.1;
   vInfo = aInfo;
   vBid = aBid;
+  vUv = aUv;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
@@ -45,6 +48,9 @@ uniform float uNight;
 uniform float uTile;
 uniform float uSelTile;
 uniform float uSel;
+uniform sampler2D uRoofTex;
+uniform float uHasTex;
+in vec2 vUv;
 in vec3 vN;
 in vec3 vP;
 in float vU;
@@ -76,11 +82,38 @@ void main() {
   vec3 n = normalize(vN);
   float kind = vInfo.x;
   float seed = vInfo.y;
-  float small = vInfo.z;
+  // Fassadenklasse aus tools/build_lod2.py: 0 Wohnhaus, 1 Nebengebäude, 2 Halle, 3 Stall/Scheune, 4 Kirche, 5 Heidehof
+  float cls = floor(vInfo.z + 0.5);
+  float small = cls == 1.0 ? 1.0 : 0.0;
   bool wall = kind < 0.5;
   vec3 base;
   if (wall) {
-    base = small > 0.5 ? mix(vec3(0.55, 0.52, 0.47), vec3(0.42, 0.33, 0.25), step(5.0, mod(seed, 10.0))) : wallColor(seed);
+    if (cls == 1.0) {
+      base = mix(vec3(0.55, 0.52, 0.47), vec3(0.42, 0.33, 0.25), step(5.0, mod(seed, 10.0)));
+    } else if (cls == 2.0) {
+      // Blechverkleidung, waagerechte Sicken, unten ein Sockel
+      float k = mod(seed, 4.0);
+      base = k < 1.0 ? vec3(0.80, 0.81, 0.80) : k < 2.0 ? vec3(0.62, 0.66, 0.68) : k < 3.0 ? vec3(0.70, 0.67, 0.60) : vec3(0.43, 0.50, 0.46);
+      base *= 0.93 + 0.07 * step(0.5, fract(vP.z * 4.0));
+      if (vP.z < 0.9) base = vec3(0.50, 0.49, 0.47);
+    } else if (cls == 3.0) {
+      // Stall und Scheune: dunkle Holzschalung oder roter Klinker
+      if (mod(seed, 3.0) < 1.5) {
+        base = vec3(0.30, 0.22, 0.16) * (0.85 + 0.15 * step(0.12, fract(vU / 0.22)));
+      } else {
+        base = vec3(0.50, 0.24, 0.17);
+      }
+    } else if (cls == 4.0) {
+      base = vec3(0.55, 0.25, 0.18); // Backstein
+    } else if (cls == 5.0) {
+      // Heidehof: dunkles Fachwerk mit Klinkerfeldern
+      base = vec3(0.58, 0.28, 0.20);
+      float beamX = 1.0 - step(0.12, fract(vU / 1.1));
+      float beamZ = 1.0 - step(0.10, fract((vP.z + 0.15) / 1.35));
+      if (max(beamX, beamZ) > 0.5) base = vec3(0.20, 0.15, 0.11);
+    } else {
+      base = wallColor(seed);
+    }
   } else if (n.z > 0.97) {
     base = vec3(0.47, 0.47, 0.46) + (hash(vec2(seed, 1.0)) - 0.5) * 0.08; // Flachdach
   } else {
@@ -90,13 +123,21 @@ void main() {
   float diff = max(dot(n, uSunDir), 0.0);
   vec3 amb = mix(uGround, uSky, n.z * 0.5 + 0.5);
   float ao = wall ? mix(0.6, 1.0, smoothstep(0.0, 3.0, vP.z)) : 1.0;
-  // Dächer: leichte Streifen entlang der Ziegelreihen
-  if (!wall && n.z < 0.97) base *= 0.94 + 0.06 * step(0.5, fract(vP.z * 3.0));
-  vec3 street = vec3(0.32, 0.24, 0.14) * uNight * (1.0 - smoothstep(0.0, 9.0, vP.z)) * (wall ? 1.0 : 0.0);
-  vec3 col = base * (amb * ao + uSun * diff * 1.15 + street + vec3(0.05, 0.06, 0.09) * uNight);
+  vec3 col;
+  if (!wall && uHasTex > 0.5 && vInfo.w > 0.5) {
+    // Dach aus dem Luftbild: Licht und Schatten sind im Foto schon enthalten,
+    // daher nur abgeschwächt beleuchten
+    vec3 tex = texture(uRoofTex, vUv).rgb;
+    col = tex * (amb * 0.55 + uSun * (0.55 + 0.45 * diff)) * 1.12 + tex * vec3(0.03, 0.035, 0.05) * uNight;
+  } else {
+    // Dächer ohne Luftbild: leichte Streifen entlang der Ziegelreihen
+    if (!wall && n.z < 0.97) base *= 0.94 + 0.06 * step(0.5, fract(vP.z * 3.0));
+    vec3 street = vec3(0.32, 0.24, 0.14) * uNight * (1.0 - smoothstep(0.0, 9.0, vP.z)) * (wall ? 1.0 : 0.0);
+    col = base * (amb * ao + uSun * diff * 1.15 + street + vec3(0.05, 0.06, 0.09) * uNight);
+  }
 
   // Fenster
-  if (wall && small < 0.5 && abs(n.z) < 0.4) {
+  if (wall && (cls == 0.0 || cls == 5.0) && abs(n.z) < 0.4) {
     float z = vP.z - 0.9;
     float row = floor(z / 3.0);
     float fz = fract(z / 3.0);
@@ -117,6 +158,18 @@ void main() {
       vec3 avg = mix(col, mix(glass, vec3(1.0, 0.8, 0.5), 0.45 * uNight), 0.22);
       col = mix(col, avg, far);
     }
+  }
+
+  // Hallen: Lichtband; Kirchen: hohe, schmale Fenster
+  if (wall && abs(n.z) < 0.4 && (cls == 2.0 || cls == 4.0)) {
+    vec3 glass = mix(vec3(0.17, 0.21, 0.26), uSky, 0.3) * (0.7 + 0.5 * diff);
+    vec3 warm = vec3(1.0, 0.8, 0.5);
+    float on = 0.0;
+    if (cls == 2.0) on = step(3.0, vP.z) * step(vP.z, 3.9) * step(0.08, fract(vU / 1.5));
+    else on = step(2.5, vP.z) * step(vP.z, 6.8) * step(0.38, fract(vU / 3.6)) * step(fract(vU / 3.6), 0.62);
+    float far = smoothstep(0.35, 0.9, max(fwidth(vU), fwidth(vP.z)));
+    vec3 win = mix(glass, warm * 1.1, uNight * (cls == 4.0 ? 0.5 : 0.25));
+    col = mix(col, mix(win, mix(col, win, 0.25), far), on);
   }
 
   if (abs(uTile - uSelTile) < 0.5 && abs(vBid - uSel) < 0.5) {
@@ -235,15 +288,32 @@ export function createBuildingLayer({ onProgress } = {}) {
     return [lng, lat];
   };
 
+  const emptyTex = new THREE.DataTexture(new Uint8Array([128, 120, 110, 255]), 1, 1);
+  emptyTex.needsUpdate = true;
+  const texLoader = new THREE.TextureLoader();
+  /** Dach-Atlas laden; bei Fehlern ohne Textur weiter. */
+  function loadRoofTexture(url) {
+    return texLoader.loadAsync(url).then((tex) => {
+      tex.flipY = false;
+      tex.generateMipmaps = true;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      tex.needsUpdate = true;
+      return tex;
+    }).catch(() => null);
+  }
+
   async function loadTile(t) {
     const entry = { state: 'loading' };
     tiles.set(t.k, entry);
     loading++;
     onProgress?.(loading);
     try {
-      const [buf, records] = await Promise.all([
+      const [buf, records, roofTex] = await Promise.all([
         fetch(DATA + t.k + '.bin').then((r) => r.arrayBuffer()),
         fetch(DATA + t.k + '.json').then((r) => r.json()),
+        t.tex ? loadRoofTexture(DATA + t.k + '.jpg') : null,
       ]);
       const dv = new DataView(buf);
       const n = dv.getUint32(4, true);
@@ -263,6 +333,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       const u = take(Int16Array, n);
       const bid = take(Uint16Array, n);
       const base = take(Int16Array, n);
+      const uv = take(Uint16Array, n * 2);
       // Geländehöhe (überhöht) direkt in die Positionen einrechnen, damit auch das Anklicken stimmt
       for (let i = 0; i < n; i++) pos[i * 3 + 2] += Math.round(((base[i] * 0.1 - REF) * EXAG) / q);
       if (n > 65535 && off % 4) off += 4 - (off % 4); // Uint32-Indizes sind ausgerichtet
@@ -275,13 +346,19 @@ export function createBuildingLayer({ onProgress } = {}) {
       geo.setAttribute('aU', new THREE.BufferAttribute(u, 1));
       geo.setAttribute('aBid', new THREE.BufferAttribute(bid, 1));
       geo.setAttribute('aBase', new THREE.BufferAttribute(base, 1));
+      geo.setAttribute('aUv', new THREE.BufferAttribute(uv, 2, true));
       geo.setIndex(new THREE.BufferAttribute(idx, 1));
       geo.computeBoundingSphere();
       const mat = new THREE.RawShaderMaterial({
         glslVersion: THREE.GLSL3,
         vertexShader: VERT,
         fragmentShader: FRAG,
-        uniforms: { ...uniforms, uTile: { value: t.i } },
+        uniforms: {
+          ...uniforms,
+          uTile: { value: t.i },
+          uRoofTex: { value: roofTex || emptyTex },
+          uHasTex: { value: roofTex ? 1 : 0 },
+        },
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(cx, cy, 0);

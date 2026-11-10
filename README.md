@@ -5,7 +5,7 @@ Interaktive 3D-Karte von Schneverdingen in der Lüneburger Heide. Sie läuft kom
 **Funktionen**
 
 - **Auf Schneverdingen begrenzt:** Die Karte zeigt das Gemeindegebiet und etwa 2 km darum herum. Weiter lässt sie sich nicht verschieben oder herauszoomen. Alles außerhalb der Gemeindegrenze ist blass überdeckt. Die Grenzen dafür stehen in `js/main.js` (`minZoom`, `maxBounds`).
-- **3D-Stadtmodell:** alle rund 24.700 Gebäude der Gemeinde aus dem amtlichen LoD2-Gebäudemodell des LGLN, mit echten Dachformen (Sattel-, Walm-, Krüppelwalmdach …). Fassaden in Klinker und Putz, Fenster, Ziegel- und Anthrazitdächer
+- **3D-Stadtmodell:** alle rund 24.700 Gebäude der Gemeinde aus dem amtlichen LoD2-Gebäudemodell des LGLN, mit echten Dachformen (Sattel-, Walm-, Krüppelwalmdach …). Die Dächer tragen das echte Luftbild (DOP20 des LGLN), man sieht also Ziegelfarbe, Solaranlagen und Flachdächer wie in Wirklichkeit. Die Fassaden richten sich nach der amtlichen Gebäudefunktion: Wohnhäuser in Klinker oder Putz mit Fenstern, Höfe mit Fachwerk, Ställe und Scheunen mit Holz oder Klinker, Hallen mit Blechverkleidung und Lichtband, Kirchen in Backstein
 - **Gelände:** echtes Relief aus dem amtlichen Geländemodell DGM1 des LGLN, 4-fach überhöht, damit die flachen Heide-Hügel (29–157 m ü. NN) sichtbar werden. Dazu eine kräftige Reliefschattierung (Ebene „Relief“). Gebäude und Bäume stehen auf dem Gelände
 - **Tageszeit:** Schieberegler mit dem echten Sonnenstand für Schneverdingen. Abends wird das Licht golden, nachts leuchten Fenster und Straßen. „Jetzt“ springt zur aktuellen Uhrzeit
 - **Bäume:** Wälder, Parks, Gärten und Heideflächen werden mit Kiefern und Laubbäumen bepflanzt, berechnet aus den Kartendaten
@@ -67,8 +67,11 @@ Das LGLN bietet das DGM1 über einen WMS an, allerdings nur als 8-Bit-Graustufen
 ```bash
 pip install scipy pillow
 python3 tools/build_dem.py arbeitsordner data/dem
-python3 tools/build_lod2.py gml data/lod2 arbeitsordner/dem.npz
+python3 tools/fetch_dop.py gml luftbilder        # Luftbilder für die Dächer (194 × ~4 MB)
+python3 tools/build_lod2.py gml data/lod2 arbeitsordner/dem.npz luftbilder
 ```
+
+Für jede Kachel schneidet `build_lod2.py` die Dächer aus dem Luftbild aus und packt sie in einen Atlas (`data/lod2/<E>_<N>.jpg`, zusammen etwa 15 MB). Die Fassadenregeln stehen in `facade_class()` in `tools/build_lod2.py` und im Shader in `js/buildings.js`.
 
 Die Überhöhung steht in `js/buildings.js` (`EXAG`). Mehr als 4,5-fach geht nicht, ohne das Datenformat zu ändern.
 
