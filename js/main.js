@@ -36,6 +36,8 @@ const map = new maplibregl.Map({
   },
 });
 window.svMap = map; // für Tests und Neugierige
+// Sofort abfangen: Das Ereignis kann eintreten, während unten noch auf die eigenen Daten gewartet wird
+const styleReady = new Promise((resolve) => map.once('style.load', resolve));
 
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 map.addControl(new maplibregl.FullscreenControl(), 'top-right');
@@ -45,16 +47,16 @@ map.addControl(new maplibregl.AttributionControl({
   customAttribution: 'Gebäude: © <a href="https://opengeodata.lgln.niedersachsen.de" target="_blank" rel="noopener">GeoBasis-DE/LGLN</a> (CC BY 4.0) · Karte: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Suche: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>',
 }), 'bottom-right');
 
+// Kompakte Quellenangabe auf schmalen Bildschirmen zugeklappt starten
+map.once('load', () => {
+  if (window.innerWidth < 760) document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+});
+
 const [places, stops, gemeinde] = await Promise.all([
   fetch(v('data/places.json')).then((r) => r.json()),
   fetch(v('data/tour.json')).then((r) => r.json()),
   fetch(v('data/gemeindegrenze.geojson')).then((r) => r.json()),
 ]);
-
-// Kompakte Quellenangabe auf schmalen Bildschirmen zugeklappt starten
-map.once('load', () => {
-  if (window.innerWidth < 760) document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
-});
 
 const buildings = createBuildingLayer({
   onProgress: (n) => { $('load-status').hidden = n === 0; },
@@ -86,14 +88,17 @@ function attempt(name, fn) {
   try { fn(); } catch (e) { console.error(`Schneverdingen 3D: ${name} fehlgeschlagen`, e); }
 }
 
-map.on('style.load', () => {
+// Start, sobald Kartenstil UND eigene Daten da sind – egal was zuerst fertig wird
+// (der Stil kommt oft schneller, wenn er im Browser-Cache liegt).
+function start() {
   attempt('Gelände', addTerrain);
   attempt('Kartenebenen', () => installLayers(map, gemeinde, buildings));
   attempt('Ebenen-Panel', () => buildLayerPanel(map, $('layer-list'), $('hiking-status'), { buildings }));
   attempt('Bäume', () => initTrees(map, buildings));
   attempt('Tageszeit', () => initDaytime({ map, buildings, slider: $('time-slider'), label: $('time-label'), nowBtn: $('time-now') }));
   attempt('Bedienung', setup);
-});
+}
+styleReady.then(start);
 
 function setup() {
   const layersPanel = $('layers');
