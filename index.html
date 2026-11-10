@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=Source+Sans+3:wght@400;600;700&display=swap">
-  <link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css?v=__VERSION__">
+  <link rel="stylesheet" href="css/style.css?v=__VERSION__">
 </head>
 <body>
   <div id="map" aria-label="3D-Karte von Schneverdingen"></div>
@@ -76,10 +76,35 @@
   </section>
 
   <p id="load-status" class="load-status" role="status" hidden>Gebäude werden geladen …</p>
+  <p id="load-error" class="load-status" role="alert" hidden>Die Karte konnte nicht vollständig geladen werden. Bitte die Seite neu laden.</p>
 
   <noscript><p class="noscript">Für die 3D-Karte wird JavaScript benötigt.</p></noscript>
 
-  <script src="vendor/maplibre-gl/maplibre-gl.js"></script>
-  <script type="module" src="js/main.js"></script>
+  <!-- Alle Dateien tragen die Version (beim Deploy der Commit), damit Browser und CDN nie alte und neue Dateien mischen -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./js/main.js": "./js/main.js?v=__VERSION__",
+      "./js/config.js": "./js/config.js?v=__VERSION__",
+      "./js/layers.js": "./js/layers.js?v=__VERSION__",
+      "./js/search.js": "./js/search.js?v=__VERSION__",
+      "./js/info.js": "./js/info.js?v=__VERSION__",
+      "./js/tour.js": "./js/tour.js?v=__VERSION__",
+      "./js/buildings.js": "./js/buildings.js?v=__VERSION__",
+      "./js/daytime.js": "./js/daytime.js?v=__VERSION__",
+      "./js/sun.js": "./js/sun.js?v=__VERSION__",
+      "./js/trees.js": "./js/trees.js?v=__VERSION__",
+      "./vendor/three/three.module.min.js": "./vendor/three/three.module.min.js?v=__VERSION__"
+    }
+  }
+  </script>
+  <script src="vendor/maplibre-gl/maplibre-gl.js?v=__VERSION__"></script>
+  <script type="module" src="./js/main.js?v=__VERSION__"></script>
+  <script>
+    // Falls ein Modul nicht lädt (z. B. Netzwerkfehler), einen Hinweis zeigen statt eines toten Menüs
+    window.addEventListener('error', (e) => {
+      if (e.target && e.target.tagName === 'SCRIPT') document.getElementById('load-error').hidden = false;
+    }, true);
+  </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // Einstieg: Karte aufbauen und Module verbinden.
-import { STYLE_URL, HOME, BBOX, reducedMotion } from './config.js';
+import { STYLE_URL, HOME, BBOX, reducedMotion, v } from './config.js';
 import { installLayers, buildLayerPanel } from './layers.js';
 import { initSearch } from './search.js';
 import { initInfo } from './info.js';
@@ -46,9 +46,9 @@ map.addControl(new maplibregl.AttributionControl({
 }), 'bottom-right');
 
 const [places, stops, gemeinde] = await Promise.all([
-  fetch('data/places.json').then((r) => r.json()),
-  fetch('data/tour.json').then((r) => r.json()),
-  fetch('data/gemeindegrenze.geojson').then((r) => r.json()),
+  fetch(v('data/places.json')).then((r) => r.json()),
+  fetch(v('data/tour.json')).then((r) => r.json()),
+  fetch(v('data/gemeindegrenze.geojson')).then((r) => r.json()),
 ]);
 
 // Kompakte Quellenangabe auf schmalen Bildschirmen zugeklappt starten
@@ -65,7 +65,7 @@ function addTerrain() {
   // Gelände aus dem DGM1 des LGLN (tools/build_dem.py), leicht überhöht, damit die Heide-Hügel sichtbar werden
   const dem = {
     type: 'raster-dem',
-    tiles: [new URL('data/dem/{z}/{x}/{y}.png', window.location.href).href.replace(/%7B/g, '{').replace(/%7D/g, '}')],
+    tiles: [v(new URL('data/dem/{z}/{x}/{y}.png', window.location.href).href.replace(/%7B/g, '{').replace(/%7D/g, '}'))],
     encoding: 'mapbox', tileSize: 256, minzoom: 10, maxzoom: 13, bounds: [9.58, 53.0, 9.99, 53.25],
     attribution: 'Gelände: © GeoBasis-DE/LGLN (CC BY 4.0)',
   };
@@ -81,13 +81,18 @@ function addTerrain() {
   map.addLayer({ id: 'sv-hillshade', type: 'raster', source: 'sv-relief', paint: { 'raster-opacity': 0.9, 'raster-fade-duration': 150 } }, firstRoad);
 }
 
+// Einzelne Schritte dürfen scheitern, ohne dass Menü und Suche unbedienbar werden
+function attempt(name, fn) {
+  try { fn(); } catch (e) { console.error(`Schneverdingen 3D: ${name} fehlgeschlagen`, e); }
+}
+
 map.on('style.load', () => {
-  addTerrain();
-  installLayers(map, gemeinde, buildings);
-  buildLayerPanel(map, $('layer-list'), $('hiking-status'), { buildings });
-  initTrees(map, buildings);
-  initDaytime({ map, buildings, slider: $('time-slider'), label: $('time-label'), nowBtn: $('time-now') });
-  setup();
+  attempt('Gelände', addTerrain);
+  attempt('Kartenebenen', () => installLayers(map, gemeinde, buildings));
+  attempt('Ebenen-Panel', () => buildLayerPanel(map, $('layer-list'), $('hiking-status'), { buildings }));
+  attempt('Bäume', () => initTrees(map, buildings));
+  attempt('Tageszeit', () => initDaytime({ map, buildings, slider: $('time-slider'), label: $('time-label'), nowBtn: $('time-now') }));
+  attempt('Bedienung', setup);
 });
 
 function setup() {

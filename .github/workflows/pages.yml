@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Version in die Datei-Adressen schreiben (Cache-Schutz)
+        run: sed -i "s/__VERSION__/${GITHUB_SHA::8}/g" index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .

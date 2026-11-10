@@ -1,5 +1,9 @@
 // Gemeinsame Konstanten und kleine Helfer.
 
+// Version aus der eigenen Adresse (?v=… aus der Import-Map in index.html); hängt an alle Datendateien
+export const VERSION = new URL(import.meta.url).searchParams.get('v') || 'dev';
+export const v = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${VERSION}`;
+
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
 // Gemeindegebiet Schneverdingen (OSM-Relation 357061), [W, S, E, N]

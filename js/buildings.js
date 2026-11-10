@@ -1,6 +1,7 @@
 // LoD2-Gebäude des LGLN als Three.js-Ebene in MapLibre.
 // Geometrie kommt vorberechnet aus data/lod2 (siehe tools/build_lod2.py).
 import * as THREE from '../vendor/three/three.module.min.js';
+import { v } from './config.js';
 
 const DATA = 'data/lod2/';
 export const EXAG = 4;
@@ -268,7 +269,7 @@ export function createBuildingLayer({ onProgress } = {}) {
     glslVersion: THREE.GLSL3, vertexShader: TREE_VERT, fragmentShader: TREE_FRAG,
     uniforms: { uSunDir: uniforms.uSunDir, uSun: uniforms.uSun, uSky: uniforms.uSky, uGround: uniforms.uGround, uNight: uniforms.uNight },
   });
-  const ready = fetch(DATA + 'index.json').then((r) => r.json()).then((d) => {
+  const ready = fetch(v(DATA + 'index.json')).then((r) => r.json()).then((d) => {
     index = d;
     index.tiles.forEach((t, i) => { t.i = i; });
     origin = d.origin;
@@ -311,9 +312,9 @@ export function createBuildingLayer({ onProgress } = {}) {
     onProgress?.(loading);
     try {
       const [buf, records, roofTex] = await Promise.all([
-        fetch(DATA + t.k + '.bin').then((r) => r.arrayBuffer()),
-        fetch(DATA + t.k + '.json').then((r) => r.json()),
-        t.tex ? loadRoofTexture(DATA + t.k + '.jpg') : null,
+        fetch(v(DATA + t.k + '.bin')).then((r) => r.arrayBuffer()),
+        fetch(v(DATA + t.k + '.json')).then((r) => r.json()),
+        t.tex ? loadRoofTexture(v(DATA + t.k + '.jpg')) : null,
       ]);
       const dv = new DataView(buf);
       const n = dv.getUint32(4, true);
