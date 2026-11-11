@@ -40,6 +40,7 @@ Dann <http://localhost:8000> öffnen. Ein Doppelklick auf `index.html` reicht ni
 | `data/lod2/` | Gebäude als Binärkacheln (1 × 1 km), erzeugt mit `tools/build_lod2.py` |
 | `data/dem/`, `data/relief/` | Geländehöhen (Terrain-RGB) und Reliefschattierung, erzeugt mit `tools/build_dem.py` |
 | `js/buildings.js` | Darstellung der Gebäude und Bäume (Three.js), Farben der Fassaden und Dächer im Shader |
+| `data/landmarks.json` | Aussehen einzelner Gebäude (Material, Farbe, Fenster, auch je Gebäudeteil) mit Quelle. Die Gebäude-ID steht im Info-Panel, wenn man ein Gebäude anklickt |
 | `js/layers.js` | Kartenebenen und ihre Farben |
 | `css/style.css` | Farben und Schriften (oben im `:root`-Block) |
 

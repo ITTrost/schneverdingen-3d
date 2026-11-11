@@ -1,0 +1,41 @@
+{
+  "hinweis": "Aussehen einzelner Gebäude. id = LoD2-Gebäude-ID des LGLN (im Info-Panel unter 'Gebäude-ID'). Materialien: klinker, putz, feldstein, holz, fachwerk. Fenster: keine, wohnhaus, kirche, kirchturm, lichtband. 'teile' gelten für Gebäudeteile ab der angegebenen Höhe in Metern.",
+  "gebaeude": [
+    {
+      "name": "Peter-und-Paul-Kirche",
+      "id": "DENILD8800004sAs",
+      "wand": { "material": "feldstein", "farbe": "#857c72" },
+      "fenster": "kirche",
+      "teile": [
+        { "abHoehe": 30, "wand": { "material": "klinker", "farbe": "#8f3c2b" }, "fenster": "kirchturm" }
+      ],
+      "quelle": "Wikipedia: Peter-und-Paul-Kirche (Schneverdingen) – Feldsteinbau von 1745/46, neugotischer Backsteinturm, fast 56 m"
+    },
+    {
+      "name": "Eine-Welt-Kirche",
+      "id": "DENILD8800004qY1",
+      "wand": { "material": "holz", "farbe": "#8a7a66" },
+      "fenster": "keine",
+      "teile": [
+        { "abHoehe": 16, "wand": { "material": "holz", "farbe": "#8d8c88" } }
+      ],
+      "quelle": "Wikipedia: Eine-Welt-Kirche – Holzbau zur Expo 2000, außen unbehandeltes Eichenholz in Brettstapelbauweise, Turmspitze aus grauen Kiefernstämmen"
+    },
+    {
+      "name": "Heimathaus De Theeshof",
+      "id": "DENILD8800008LIZ",
+      "wand": { "material": "fachwerk", "farbe": "#9a4632" },
+      "fenster": "wohnhaus",
+      "annahme": true,
+      "quelle": "Annahme: Fachwerk-Hallenhaus mit Klinkergefachen, wie bei historischen Heidehöfen üblich – bitte mit Foto prüfen"
+    },
+    {
+      "name": "Heimathaus De Theeshof (Nebengebäude)",
+      "id": "DENILD8800004rZj",
+      "wand": { "material": "fachwerk", "farbe": "#9a4632" },
+      "fenster": "keine",
+      "annahme": true,
+      "quelle": "Annahme wie oben – bitte mit Foto prüfen"
+    }
+  ]
+}

@@ -161,16 +161,23 @@ def building_record(bel):
 
 
 def surfaces(bel):
-    """Alle Wand- und Dachflächen eines Gebäudes inkl. Gebäudeteile."""
+    """Alle Wand- und Dachflächen eines Gebäudes inkl. Gebäudeteile.
+    Liefert (Art, Ring, Teilnummer) und die Höhen der Teile (Teil 0 = Gebäude selbst)."""
     out = []
-    for kind, tag in ((0, 'WallSurface'), (1, 'RoofSurface')):
-        for s in bel.iter(B + tag):
-            for pl in s.iter(G + 'posList'):
-                # nur Außenringe (die LGLN-Daten haben keine Innenringe)
-                if pl.getparent().getparent().tag == G + 'exterior':
-                    out.append((kind, poslist(pl)))
+    parts = [bel] + list(bel.iter(B + 'BuildingPart'))
+    part_heights = []
+    for pi, part in enumerate(parts):
+        h = part.findtext('bldg:measuredHeight', namespaces=NS)
+        part_heights.append(round(float(h), 1) if h else None)
+        for bb in part.findall('bldg:boundedBy', NS):
+            for kind, tag in ((0, 'WallSurface'), (1, 'RoofSurface')):
+                for s in bb.findall(B + tag):
+                    for pl in s.iter(G + 'posList'):
+                        # nur Außenringe (die LGLN-Daten haben keine Innenringe)
+                        if pl.getparent().getparent().tag == G + 'exterior':
+                            out.append((kind, poslist(pl), pi))
     grounds = [poslist(pl) for s in bel.iter(B + 'GroundSurface') for pl in s.iter(G + 'posList')]
-    return out, grounds
+    return out, grounds, part_heights
 
 
 def footprint_area(grounds):
@@ -231,11 +238,11 @@ def build_tile(path, dem=None):
     for _, bel in etree.iterparse(path, tag=B + 'Building'):
         if bel.getparent().tag != '{%s}cityObjectMember' % NS['core']:
             continue  # Gebäudeteile werden über das Gebäude erfasst
-        polys, grounds = surfaces(bel)
+        polys, grounds, part_heights = surfaces(bel)
         if not polys:
             bel.clear()
             continue
-        allz = np.concatenate([p[:, 2] for _, p in polys])
+        allz = np.concatenate([p[:, 2] for _, p, _ in polys])
         ground = min(g[:, 2].min() for g in grounds) if grounds else allz.min()
         top = allz.max()
         rec = building_record(bel)
@@ -246,13 +253,15 @@ def build_tile(path, dem=None):
             ge, gn = float(polys[0][1][:, 0].mean()), float(polys[0][1][:, 1].mean())
         base = dem.at(ge, gn) if dem else 0.0
         rec['z'] = round(float(ground), 1)  # Bodenhöhe m NHN laut LoD2
+        if len(part_heights) > 1:
+            rec['p'] = part_heights  # Höhen der Gebäudeteile (für data/landmarks.json)
         if rec['h'] is None:
             rec['h'] = round(float(top - ground), 1)
         bid = len(records)
         records.append(rec)
         cls = facade_class(rec, top - ground, footprint_area(grounds), rec['r'])
         seed = zlib.crc32(rec['id'].encode()) & 0xFF
-        for kind, ring in polys:
+        for kind, ring, part in polys:
             loc = to_local(ring)
             loc[:, 2] -= ground
             tri, n, ring2 = triangulate(loc)
@@ -278,7 +287,8 @@ def build_tile(path, dem=None):
             verts.append(ring2)
             norms.append(np.repeat(n[None, :], len(ring2), axis=0))
             flags = cls
-            info.append(np.repeat(np.array([[kind, seed, flags, 0]], dtype=np.uint8), len(ring2), axis=0))
+            # info[3]: Bit 0 = Dach mit Luftbild (make_atlas), Bit 1–7 = Gebäudeteil
+            info.append(np.repeat(np.array([[kind, seed, flags, min(part, 63) << 1]], dtype=np.uint8), len(ring2), axis=0))
             us.append(u)
             bids.append(np.full(len(ring2), bid, dtype=np.uint16))
             bases.append(np.full(len(ring2), round(base * 10), dtype=np.int16))
@@ -364,7 +374,7 @@ def make_atlas(geo, key, dop_dir, out_jpg):
         py = ((N1 - geo['utm'][m, 1]) / DOP_RES - y0) * (h / (y1 - y0))
         uv[m, 0] = np.clip(np.round((ax + px) / W * 65535), 0, 65535)
         uv[m, 1] = np.clip(np.round((ay + py) / H * 65535), 0, 65535)
-    geo['info'][roof, 3] = 1  # Dach hat Textur
+    geo['info'][roof, 3] |= 1  # Dach hat Textur
     geo['uv'] = uv
     return W, H, scale
 
