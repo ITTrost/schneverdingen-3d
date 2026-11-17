@@ -44,7 +44,7 @@ map.addControl(new maplibregl.FullscreenControl(), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 map.addControl(new maplibregl.AttributionControl({
   compact: true,
-  customAttribution: 'Gebäude: © <a href="https://opengeodata.lgln.niedersachsen.de" target="_blank" rel="noopener">GeoBasis-DE/LGLN</a> (CC BY 4.0) · Karte: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Fassadenfotos: <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a>-Mitwirkende (CC BY-SA 4.0) · Suche: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>',
+  customAttribution: 'Gebäude: © <a href="https://opengeodata.lgln.niedersachsen.de" target="_blank" rel="noopener">GeoBasis-DE/LGLN</a> (CC BY 4.0) · Karte: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Suche: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>',
 }), 'bottom-right');
 
 // Kompakte Quellenangabe auf schmalen Bildschirmen zugeklappt starten
@@ -97,6 +97,10 @@ function start() {
   attempt('Bäume', () => initTrees(map, buildings));
   attempt('Tageszeit', () => initDaytime({ map, buildings, slider: $('time-slider'), label: $('time-label'), nowBtn: $('time-now') }));
   attempt('Bedienung', setup);
+  if (new URLSearchParams(location.search).has('bearbeiten')) {
+    import('./editor.js').then(({ initEditor }) => initEditor({ map, buildings }))
+      .catch((e) => console.error('Bearbeitungsmodus nicht geladen', e));
+  }
 }
 styleReady.then(start);
 

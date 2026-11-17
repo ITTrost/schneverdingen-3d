@@ -77,16 +77,18 @@ Für jede Kachel schneidet `build_lod2.py` die Dächer aus dem Luftbild aus und 
 
 Die Überhöhung steht in `js/buildings.js` (`EXAG`). Mehr als 4,5-fach geht nicht, ohne das Datenformat zu ändern.
 
-### Fassadenfotos (Test)
+### Einzelne Gebäude gestalten (Bearbeitungsmodus)
 
-Einzelne Gebäude können ein echtes, entzerrtes Fassadenfoto bekommen (derzeit: Eiscafé Venezia). Ablauf:
+Mit `?bearbeiten` hinter der Adresse (z. B. `https://ittrost.github.io/schneverdingen-3d/?bearbeiten`) erscheint rechts ein Bearbeitungsfeld. Ein Klick auf ein Gebäude öffnet seine Einstellungen:
 
-1. Passendes Straßenfoto auf Mapillary suchen (Mapillary-Token nötig).
-2. Kameralage an das Gebäude anpassen: `tools/fit_camera.py` (automatisch über Kanten) oder `tools/solve_camera.py` (über drei Punktzuordnungen).
-3. Vorschau prüfen und Wandtexturen erzeugen: `tools/facade_photo.py vorschau|textur …`
-4. Den ausgegebenen Eintrag (`basis`, `fotos`) in `data/landmarks.json` übernehmen, Bilder liegen in `data/fassaden/`.
+- **Wand:** Material (Klinker, Putz, Feldstein, Holz, Fachwerk), Farbe, Höhe, ab der das Dach beginnt
+- **Fenster:** Art, Abstand (eng, normal, weit), Breite, Rahmenfarbe
+- **Laden:** Ladenfront automatisch, rundum oder keine; Markisenfarbe, gestreift oder glatt, Schild mit Schriftzug
+- **Dach:** eigene Farbe statt Luftbild, eigenes Walmdach mit Neigung und Traufbrett
 
-Die Fotos stehen unter CC BY-SA 4.0 (Mapillary-Mitwirkende), Urheber und Bild-ID stehen in `quelle`.
+Änderungen sind sofort zu sehen und bleiben im Browser gespeichert. Mit **„landmarks.json speichern“** entsteht die fertige Datei, die `data/landmarks.json` im Repository ersetzt. Schriftbögen (`bogen`) und weitere Schilder (`schilder`) werden direkt in der Datei eingetragen; das Eiscafé Venezia ist ein vollständiges Beispiel.
+
+Die Foto-Werkzeuge (`tools/facade_photo.py`, `fit_camera.py`, `solve_camera.py`, `facades_mapillary.py`) bleiben als Hilfe zum Ausmessen erhalten, werden für die Karte aber nicht mehr verwendet.
 
 ## Datenquellen und Lizenzen
 
@@ -96,7 +98,7 @@ Die Fotos stehen unter CC BY-SA 4.0 (Mapillary-Mitwirkende), Urheber und Bild-ID
 | Gelände (DGM1) | © GeoBasis-DE/LGLN, [DGM1-WMS](https://opendata.lgln.niedersachsen.de/doorman/noauth/dgm_wms?SERVICE=WMS&REQUEST=GetCapabilities) | CC BY 4.0 |
 | 3D-Gebäude (LoD2) | © GeoBasis-DE/LGLN, [OpenGeoData.NI](https://opengeodata.lgln.niedersachsen.de) | CC BY 4.0 |
 | Luftbild (DOP20) | © GeoBasis-DE/LGLN, [OpenGeoData.NI](https://ni-lgln-opengeodata.hub.arcgis.com/) | CC BY 4.0 |
-| Fassadenfotos | [Mapillary](https://www.mapillary.com)-Mitwirkende | CC BY-SA 4.0 |
+| Vorlagen für einzelne Gebäude | [Mapillary](https://www.mapillary.com)-Mitwirkende (nur als Vorlage, keine Bilder in der Karte) | CC BY-SA 4.0 |
 | Adresssuche | [Photon](https://photon.komoot.io) von komoot, OSM-Daten | ODbL |
 | Umgebung und Wanderrouten (live) | [Overpass API](https://overpass-api.de), OSM-Daten | ODbL |
 | Kartenbibliothek | [MapLibre GL JS](https://maplibre.org) 4.7.1 (`vendor/`) | BSD-3-Clause |

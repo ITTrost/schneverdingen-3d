@@ -1,5 +1,5 @@
 {
- "hinweis": "Aussehen einzelner Gebäude. id = LoD2-Gebäude-ID des LGLN (im Info-Panel unter 'Gebäude-ID'). Materialien: klinker, putz, feldstein, holz, fachwerk. Fenster: keine, wohnhaus, kirche, kirchturm, lichtband. 'teile' gelten für Gebäudeteile ab der angegebenen Höhe in Metern. 'fotos' sind entzerrte Fassadenfotos (tools/facade_photo.py), 'basis' die Geländehöhe des Gebäudes in m NHN. 'dach.farbe' ersetzt das Luftbild auf dem Dach (z. B. wenn Bäume darüber stehen).",
+ "hinweis": "Aussehen einzelner Gebäude. id = LoD2-Gebäude-ID des LGLN (im Info-Panel unter 'Gebäude-ID'). Materialien: klinker, putz, feldstein, holz, fachwerk. Fenster: keine, wohnhaus, kirche, kirchturm, lichtband. 'teile' gelten für Gebäudeteile ab der angegebenen Höhe in Metern. 'fotos' sind entzerrte Fassadenfotos (tools/facade_photo.py), 'basis' die Geländehöhe des Gebäudes in m NHN. 'dach.farbe' ersetzt das Luftbild auf dem Dach (z. B. wenn Bäume darüber stehen). 'wand.bis' zeichnet die Wand oberhalb dieser Höhe als Dach (für steile Dächer, die im Modell fehlen). 'laden': modus auto|rundum|aus, markise, streifen, schild. 'fenster' auch als Objekt: art, abstand (eng|normal|weit), breite (0–1), rahmen (Farbe). 'schilder' und 'bogen' setzen Schriftzüge an die Wand in Richtung 'richtung' (Grad). 'dach.form': 'walm' ersetzt das Modelldach durch ein eigenes Walmdach (neigung, ueberstand, traufe = Farbe des Traufbretts); die Wand endet dann bei 'wand.bis'.",
  "gebaeude": [
   {
    "name": "Peter-und-Paul-Kirche",
@@ -67,164 +67,61 @@
    "id": "DENILD8800004qlI",
    "wand": {
     "material": "putz",
-    "farbe": "#e4e1d8"
+    "farbe": "#f3f0ea",
+    "bis": 3.5
    },
-   "fenster": "keine",
-   "basis": 83.59,
-   "fotos": [
+   "fenster": {
+    "art": "keine",
+    "rahmen": "#f4f2ee"
+   },
+   "laden": {
+    "modus": "rundum",
+    "markise": "#f3f0ea",
+    "streifen": false
+   },
+   "dach": {
+    "form": "walm",
+    "farbe": "#4f463d",
+    "neigung": 36,
+    "ueberstand": 0.55,
+    "traufe": "#f3f0ea"
+   },
+   "bogen": {
+    "text": "V·E·N·E·Z·I·A",
+    "richtung": 120,
+    "breite": 4.2,
+    "stich": 0.85,
+    "unten": 4.0,
+    "stuetze": 0.55,
+    "abstand": 0.3,
+    "farbe": "#ffffff",
+    "textFarbe": "#c2185b"
+   },
+   "schilder": [
     {
-     "bild": "data/fassaden/DENILD8800004qlI_2.jpg",
-     "wand": [
-      [
-       9.7852543,
-       53.11910299,
-       5.63,
-       0.0,
-       1.0
-      ],
-      [
-       9.78526725,
-       53.11907657,
-       5.63,
-       1.0,
-       1.0
-      ],
-      [
-       9.78526725,
-       53.11907657,
-       0.0,
-       1.0,
-       0.0
-      ],
-      [
-       9.7852543,
-       53.11910299,
-       0.0,
-       0.0,
-       0.0
-      ]
-     ],
-     "normale": [
-      0.956,
-      0.2934
-     ]
+     "text": "EIS",
+     "richtung": 120,
+     "versatz": -2.55,
+     "hoehe": 4.25,
+     "breite": 1.0,
+     "hoehe2": 0.42,
+     "abstand": 0.3,
+     "farbe": "#ffffff",
+     "textFarbe": "#c2185b"
     },
     {
-     "bild": "data/fassaden/DENILD8800004qlI_3.jpg",
-     "wand": [
-      [
-       9.78522352,
-       53.11912617,
-       5.63,
-       0.0,
-       1.0
-      ],
-      [
-       9.78525417,
-       53.11910314,
-       5.63,
-       1.0,
-       1.0
-      ],
-      [
-       9.78525417,
-       53.11910314,
-       0.0,
-       1.0,
-       0.0
-      ],
-      [
-       9.78522352,
-       53.11912617,
-       0.0,
-       0.0,
-       0.0
-      ]
-     ],
-     "normale": [
-      0.7737,
-      0.6335
-     ]
-    },
-    {
-     "bild": "data/fassaden/DENILD8800004qlI_6.jpg",
-     "wand": [
-      [
-       9.78526583,
-       53.11904722,
-       5.63,
-       0.0,
-       1.0
-      ],
-      [
-       9.78525261,
-       53.11901792,
-       5.63,
-       1.0,
-       1.0
-      ],
-      [
-       9.78525261,
-       53.11901792,
-       0.0,
-       1.0,
-       0.0
-      ],
-      [
-       9.78526583,
-       53.11904722,
-       0.0,
-       0.0,
-       0.0
-      ]
-     ],
-     "normale": [
-      0.9679,
-      -0.2514
-     ]
-    },
-    {
-     "bild": "data/fassaden/DENILD8800004qlI_7.jpg",
-     "wand": [
-      [
-       9.78526728,
-       53.11907643,
-       5.63,
-       0.0,
-       1.0
-      ],
-      [
-       9.78526586,
-       53.11904732,
-       5.63,
-       1.0,
-       1.0
-      ],
-      [
-       9.78526586,
-       53.11904732,
-       0.0,
-       1.0,
-       0.0
-      ],
-      [
-       9.78526728,
-       53.11907643,
-       0.0,
-       0.0,
-       0.0
-      ]
-     ],
-     "normale": [
-      0.9998,
-      -0.0185
-     ]
+     "text": "CAFÉ",
+     "richtung": 120,
+     "versatz": 2.55,
+     "hoehe": 4.25,
+     "breite": 1.0,
+     "hoehe2": 0.42,
+     "abstand": 0.3,
+     "farbe": "#ffffff",
+     "textFarbe": "#c2185b"
     }
    ],
-   "quelle": "Fassaden aus einem Mapillary-Straßenfoto entzerrt – Bild 733462938068652, Foto: hotteliene (CC BY-SA 4.0) · Dach: dunkle Ziegel wie im Foto (das Luftbild zeigt dort Baumkronen)",
-   "dach": {
-    "farbe": "#4f3b32"
-   }
+   "quelle": "Nachgebaut nach einem Foto des Nutzers und Mapillary-Straßenfotos: weiße Glasfront, weiße Traufe, dunkles Walmdach, Schriftbogen „V·E·N·E·Z·I·A“ mit „EIS“ und „CAFÉ“"
   },
   {
    "name": "Klinkerhaus am Eiscafé",

@@ -56,7 +56,12 @@ uniform float uSel;
 uniform sampler2D uRoofTex;
 uniform float uHasTex;
 uniform sampler2D uStyle;
-uniform sampler2D uRoofStyle; // je Gebäude: rgb Dachfarbe, a > 0.5 = statt Luftbild verwenden   // je Gebäude (x) und Gebäudeteil (y): rgb Farbe, a = Material | Fenster << 4
+// Zusatzwerte je Gebäude (Spalte = Gebäude):
+//  Zeile 0: rgb Dachfarbe, a: Bit 7 = statt Luftbild, Bits 0-6 = Wand nur bis zu dieser Höhe (dm), darüber Dach
+//  Zeile 1: rgb Markisenfarbe, a = Bits: 1 Farbe gesetzt, 2 Laden rundum, 4 kein Laden, 8 Markise ohne Streifen,
+//           16 eigenes Dach (Modelldach und Wand oberhalb von 'bis' ausblenden)
+//  Zeile 2: rgb Fensterrahmen (0 = keiner), a = Fensterabstand (Bits 0-1: 0 normal, 1 eng, 2 weit) | Breite << 2 (0 = Standard)
+uniform sampler2D uExtra;   // je Gebäude (x) und Gebäudeteil (y): rgb Farbe, a = Material | Fenster << 4
 in vec2 vUv;
 flat in float vFh;
 in vec3 vN;
@@ -149,7 +154,10 @@ void main() {
   float cls = floor(vInfo.z + 0.5);
   float infoW = floor(vInfo.w + 0.5);
   float hasTex = mod(infoW, 2.0);
-  bool shopWall = infoW > 127.5;   // Bit 7: Ladenfront (tools/build_lod2.py)
+  vec4 ex1 = texelFetch(uExtra, ivec2(int(vBid + 0.5), 1), 0);
+  vec4 ex2 = texelFetch(uExtra, ivec2(int(vBid + 0.5), 2), 0);
+  float shopBits = floor(ex1.a * 255.0 + 0.5);
+  bool shopWall = (infoW > 127.5 || mod(floor(shopBits / 2.0), 2.0) > 0.5) && mod(floor(shopBits / 4.0), 2.0) < 0.5;
   float part = min(mod(floor(infoW / 2.0), 64.0), float(textureSize(uStyle, 0).y - 1));
   vec4 st = texelFetch(uStyle, ivec2(int(vBid + 0.5), int(part)), 0);
   float sa = floor(st.a * 255.0 + 0.5);
@@ -158,8 +166,17 @@ void main() {
   bool wall = kind < 0.5;
   vec2 uv = vec2(vU, vP.z);
   float px = max(fwidth(vU), fwidth(vP.z));
+  vec4 rs = texelFetch(uExtra, ivec2(int(vBid + 0.5), 0), 0);
+  float ra = floor(rs.a * 255.0 + 0.5);
+  bool roofOverride = ra > 127.5;
+  float wallTop = mod(ra, 128.0) * 0.1;
+  bool ownRoof = mod(floor(shopBits / 16.0), 2.0) > 0.5;
+  if (ownRoof && (!wall || (wallTop > 0.5 && vP.z > wallTop))) discard;   // wird durch das eigene Dach ersetzt
+  bool roofBand = wall && wallTop > 0.5 && vP.z > wallTop;   // Wand oberhalb der Traufe als Dach zeichnen
   vec3 base;
-  if (wall && mat > 0.5) {
+  if (roofBand) {
+    base = (roofOverride ? rs.rgb : vec3(0.32, 0.25, 0.21)) * (0.9 + 0.1 * step(0.5, fract(vP.z * 3.0)));
+  } else if (wall && mat > 0.5) {
     vec3 c = st.rgb;
     base = mat < 1.5 ? brick(uv, c, px) : mat < 2.5 ? c : mat < 3.5 ? fieldstone(uv, c, px) : mat < 4.5 ? boards(uv, c, px) : timber(uv, c, px);
   } else if (wall) {
@@ -192,8 +209,7 @@ void main() {
   vec3 amb = mix(uGround, uSky, n.z * 0.5 + 0.5);
   float ao = wall ? mix(0.6, 1.0, smoothstep(0.0, 3.0, vP.z)) : 1.0;
   vec3 col;
-  vec4 rs = texelFetch(uRoofStyle, ivec2(int(vBid + 0.5), 0), 0);
-  if (!wall && rs.a > 0.5) {
+  if (!wall && roofOverride) {
     base = rs.rgb * (0.94 + 0.06 * step(0.5, fract(vP.z * 3.0)));
     col = base * (amb + uSun * diff * 1.15 + vec3(0.05, 0.06, 0.09) * uNight);
   } else if (!wall && uHasTex > 0.5 && hasTex > 0.5) {
@@ -220,17 +236,20 @@ void main() {
     float k = mod(seed, 6.0);
     vec3 awn = k < 1.0 ? vec3(0.62, 0.13, 0.13) : k < 2.0 ? vec3(0.17, 0.36, 0.22) : k < 3.0 ? vec3(0.13, 0.22, 0.36)
              : k < 4.0 ? vec3(0.44, 0.11, 0.18) : k < 5.0 ? vec3(0.78, 0.69, 0.52) : vec3(0.30, 0.30, 0.31);
+    if (mod(shopBits, 2.0) > 0.5) awn = ex1.rgb;
+    bool plain = mod(floor(shopBits / 8.0), 2.0) > 0.5;
     vec3 lightIn = amb * ao + uSun * diff * 1.15;
     float frame = 1.0 - smoothstep(0.03, 0.12, px);      // Rahmen nur aus der Nähe
     float mull = step(fract(vU / 1.8), 0.045) * frame;
-    vec3 inside = mix(vec3(0.10, 0.10, 0.09), vec3(1.0, 0.84, 0.58), 0.18 + 0.7 * uNight);
-    vec3 shopGlass = mix(inside, uSky * 0.75, 0.3 * (1.0 - uNight)) * (0.75 + 0.35 * diff * (1.0 - uNight));
+    bool hasFrameC = ex2.r + ex2.g + ex2.b > 0.01;
+    vec3 inside = mix(vec3(0.16, 0.15, 0.14), vec3(1.0, 0.84, 0.58), 0.18 + 0.7 * uNight);
+    vec3 shopGlass = mix(inside, uSky * 0.95, 0.45 * (1.0 - uNight)) * (0.8 + 0.35 * diff * (1.0 - uNight));
     if (z < 0.35) {
       col = vec3(0.30, 0.29, 0.28) * lightIn;                                   // Sockel
     } else if (z < SHOP_GROUND - 1.05) {
-      col = mix(shopGlass + inside * 0.35 * uNight, vec3(0.20, 0.20, 0.21) * lightIn, mull);
+      col = mix(shopGlass + inside * 0.35 * uNight, (hasFrameC ? ex2.rgb : vec3(0.20, 0.20, 0.21)) * lightIn, mull);
     } else if (z < SHOP_GROUND - 0.45) {
-      float stripe = step(0.5, fract(vU / 0.45)) * frame;                        // Markise
+      float stripe = plain ? 0.0 : step(0.5, fract(vU / 0.45)) * frame;          // Markise
       float drop = smoothstep(SHOP_GROUND - 1.05, SHOP_GROUND - 0.95, z);
       col = mix(awn, mix(awn, vec3(0.92, 0.90, 0.86), 0.55), stripe * 0.6) * lightIn * mix(0.7, 1.0, drop);
     } else {
@@ -239,16 +258,27 @@ void main() {
   }
 
   // Wohnfenster: Geschosshöhe aus den Daten, Fensterraster mittig in der Wand
+  if (roofBand) win = 1.0;
   if (wall && win == 2.0 && abs(n.z) < 0.4 && !shopFront && vU >= 0.0) {
     float fh = max(vFh, 2.4);
     float z0 = shopWall ? SHOP_GROUND : 0.0;
     float z = vP.z - z0;
     float row = floor(z / fh);
     float fz = fract(z / fh);
-    float cell = floor(vU / 2.7);
-    float fx = fract(vU / 2.7);
+    float ea = floor(ex2.a * 255.0 + 0.5);
+    float sp = mod(ea, 4.0);
+    float cw = sp == 1.0 ? 1.35 : sp == 2.0 ? 5.4 : 2.7;                 // Fensterachse in Metern
+    float ww = floor(ea / 4.0) > 0.5 ? floor(ea / 4.0) / 63.0 : 0.44;    // Fensterbreite als Anteil der Achse
+    float cell = floor(vU / cw);
+    float fx = fract(vU / cw);
     float sill = 0.85 / fh, head = min(0.9, (0.85 + 1.35) / fh);
-    if (z > 0.0 && fz > sill && fz < head && fx > 0.28 && fx < 0.72) {
+    float x0 = 0.5 - ww * 0.5, x1 = 0.5 + ww * 0.5;
+    bool hasFrame = ex2.r + ex2.g + ex2.b > 0.01;
+    float fr = 0.07 / cw, frz = 0.07 / fh;                                 // Rahmenbreite 7 cm
+    if (hasFrame && z > 0.0 && fz > sill - frz && fz < head + frz && fx > x0 - fr && fx < x1 + fr
+        && !(fz > sill && fz < head && fx > x0 && fx < x1)) {
+      col = mix(ex2.rgb * (amb * ao + uSun * diff * 1.15), col, far);
+    } else if (z > 0.0 && fz > sill && fz < head && fx > x0 && fx < x1) {
       float h = hash(vec2(cell + vBid * 13.17 + uTile * 3.1, row + seed * 0.37));
       vec3 warm = mix(vec3(1.0, 0.72, 0.38), vec3(1.0, 0.88, 0.62), hash(vec2(h, row)));
       float lit = step(h, 0.45) * uNight;
@@ -344,6 +374,7 @@ function treeGeometries() {
 // Codes müssen zum Shader passen (FRAG: mat / win)
 const MATERIALS = { klinker: 1, putz: 2, feldstein: 3, holz: 4, fachwerk: 5 };
 const WINDOWS = { keine: 1, wohnhaus: 2, kirche: 3, kirchturm: 4, lichtband: 5 };
+const SHOP_GROUND = 3.8; // Höhe des Ladengeschosses, wie im Shader und in tools/build_lod2.py
 const MAX_PARTS = 64; // Teilnummer ist in tools/build_lod2.py auf 0–63 begrenzt
 const hexRgb = (hex) => {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
@@ -440,34 +471,45 @@ export function createBuildingLayer({ onProgress } = {}) {
     // Zeilen nur so viele, wie die Wahrzeichen dieser Kachel Teile haben (meist 1)
     const rows = Math.min(MAX_PARTS, Math.max(1, ...records.filter((r) => landmarks.has(r.id)).map((r) => (r.p || [0]).length)));
     const data = new Uint8Array(w * rows * 4);
-    const roof = new Uint8Array(w * 4); // a = 255: eigene Dachfarbe statt Luftbild
+    const extra = new Uint8Array(w * 3 * 4); // Zeilen siehe uExtra im Shader
     records.forEach((rec, bid) => {
       const fa = facades.get(rec.id);
       const lm = landmarks.get(rec.id) || (fa && { wand: { farbe: fa[0], material: fa[1] }, gemessen: true });
       if (!lm) return;
-      if (lm.dach?.farbe) {
-        const [r, g, b] = hexRgb(lm.dach.farbe);
-        roof.set([r, g, b, 255], bid * 4);
-      }
+      const top = lm.wand?.bis ? Math.max(1, Math.min(127, Math.round(lm.wand.bis * 10))) : 0;
+      extra.set([...(lm.dach?.farbe ? hexRgb(lm.dach.farbe) : [0, 0, 0]), (lm.dach?.farbe ? 128 : 0) | top], bid * 4);
+      const laden = lm.laden || {};
+      let bits = 0;
+      if (laden.markise) bits |= 1;
+      if (laden.modus === 'rundum') bits |= 2;
+      if (laden.modus === 'aus') bits |= 4;
+      if (laden.streifen === false) bits |= 8;
+      if (lm.dach?.form === 'walm') bits |= 16;
+      extra.set([...(laden.markise ? hexRgb(laden.markise) : [0, 0, 0]), bits], (w + bid) * 4);
+      const fo = typeof lm.fenster === 'object' ? lm.fenster : {};
+      const sp = { eng: 1, weit: 2 }[fo.abstand] || 0;
+      const wb = fo.breite ? Math.max(1, Math.min(63, Math.round(fo.breite * 63))) : 0;
+      extra.set([...(fo.rahmen ? hexRgb(fo.rahmen) : [0, 0, 0]), sp | (wb << 2)], (2 * w + bid) * 4);
       const heights = rec.p || [rec.h];
       for (let row = 0; row < rows; row++) {
         const h = heights[Math.min(row, heights.length - 1)] ?? rec.h;
         // spätere Regeln (höheres abHoehe) gewinnen
         const rule = [lm, ...(lm.teile || []).filter((t) => h != null && h >= t.abHoehe).sort((a, b) => a.abHoehe - b.abHoehe)]
           .reduce((acc, r) => ({ wand: r.wand || acc.wand, fenster: r.fenster || acc.fenster }), {});
+        const fart = typeof rule.fenster === 'object' ? rule.fenster.art : rule.fenster;
         const [r, g, b] = hexRgb(rule.wand?.farbe);
         const o = (row * w + bid) * 4;
         data[o] = r; data[o + 1] = g; data[o + 2] = b;
-        data[o + 3] = (MATERIALS[rule.wand?.material] || 0) | ((WINDOWS[rule.fenster] || 0) << 4);
+        data[o + 3] = (MATERIALS[rule.wand?.material] || 0) | ((WINDOWS[fart] || 0) << 4);
       }
     });
     const tex = new THREE.DataTexture(data, w, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
     tex.minFilter = tex.magFilter = THREE.NearestFilter;
     tex.needsUpdate = true;
-    const roofTex = new THREE.DataTexture(roof, w, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
-    roofTex.minFilter = roofTex.magFilter = THREE.NearestFilter;
-    roofTex.needsUpdate = true;
-    return [tex, roofTex];
+    const exTex = new THREE.DataTexture(extra, w, 3, THREE.RGBAFormat, THREE.UnsignedByteType);
+    exTex.minFilter = exTex.magFilter = THREE.NearestFilter;
+    exTex.needsUpdate = true;
+    return [tex, exTex];
   }
 
   // Entzerrte Fassadenfotos (data/landmarks.json -> fotos), 5 cm vor der LoD2-Wand
@@ -519,6 +561,275 @@ export function createBuildingLayer({ onProgress } = {}) {
         photoMeshes.push(mesh);
       }
     }
+  }
+
+  // ---------- Schilder und Schriftbögen (data/landmarks.json: laden.schild, schilder, bogen) ----------
+  const decor = new Map(); // Gebäude-ID -> [Mesh]
+  const decorVisible = () => visible;
+  const DECOR_VERT = `
+    precision highp float;
+    uniform mat4 projectionMatrix; uniform mat4 modelViewMatrix;
+    in vec3 position; in vec2 uv; in vec3 normal;
+    out vec2 vUv; out vec3 vN;
+    void main() { vUv = uv; vN = normal; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+  const DECOR_FRAG = `
+    precision highp float;
+    uniform sampler2D uMap; uniform vec3 uSunDir; uniform vec3 uSun; uniform vec3 uSky; uniform vec3 uGround; uniform float uNight;
+    in vec2 vUv; in vec3 vN; out vec4 outColor;
+    void main() {
+      vec2 uv = gl_FrontFacing ? vUv : vec2(1.0 - vUv.x, vUv.y);   // Rückseite nicht spiegeln
+      vec3 tex = texture(uMap, uv).rgb;
+      vec3 n = normalize(gl_FrontFacing ? vN : -vN);
+      float diff = max(dot(n, uSunDir), 0.0);
+      vec3 amb = mix(uGround, uSky, 0.6);
+      outColor = vec4(tex * (amb * 0.8 + uSun * (0.45 + 0.6 * diff)) + tex * uNight * 0.45, 1.0);
+    }`;
+  const decorMat = (tex) => new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: DECOR_VERT, fragmentShader: DECOR_FRAG, side: THREE.DoubleSide,
+    uniforms: { uMap: { value: tex }, uSunDir: uniforms.uSunDir, uSun: uniforms.uSun, uSky: uniforms.uSky, uGround: uniforms.uGround, uNight: uniforms.uNight },
+  });
+
+  /** Schrift als Textur: Hintergrundfarbe, Textfarbe, Seitenverhältnis Breite/Höhe. */
+  function textTexture(text, bg, fg, aspect, font = 'Bitter, Georgia, serif') {
+    const H = 128;
+    const W = Math.min(2048, Math.max(64, Math.round(H * aspect / 8) * 8));
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    if (text) {
+      let size = H * 0.66;
+      g.font = `700 ${size}px ${font}`;
+      while (g.measureText(text).width > W * 0.9 && size > 10) { size *= 0.92; g.font = `700 ${size}px ${font}`; }
+      g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(text, W / 2, H * 0.54);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 8;
+    tex.colorSpace = THREE.NoColorSpace;
+    return tex;
+  }
+
+  /** Wände eines Gebäudes nach Richtung gruppieren (lokale Meter, Höhe über Gebäudegrund). */
+  function wallGroups(entry, bidx) {
+    const { pos, nrm, info, bid, base, cx, cy, q } = entry.geo;
+    const groups = new Map();
+    let lift = 0;
+    for (let i = 0; i < bid.length; i++) {
+      if (bid[i] !== bidx || info[i * 4] !== 0) continue;
+      const nx = nrm[i * 4] / 127, ny = nrm[i * 4 + 1] / 127, nz = nrm[i * 4 + 2] / 127;
+      if (Math.abs(nz) > 0.3) continue;
+      lift = (base[i] * 0.1 - REF) * EXAG;
+      const az = (Math.atan2(nx, ny) * 180 / Math.PI + 360) % 360;
+      const key = Math.round(az / 10) % 36;
+      if (!groups.has(key)) groups.set(key, { nx: 0, ny: 0, pts: [], shop: false });
+      const gr = groups.get(key);
+      gr.nx += nx; gr.ny += ny;
+      gr.pts.push([cx + pos[i * 3] * q, cy + pos[i * 3 + 1] * q]);
+      if (info[i * 4 + 3] & 128) gr.shop = true;
+    }
+    return [...groups.values()].map((gr) => {
+      const l = Math.hypot(gr.nx, gr.ny) || 1;
+      const nx = gr.nx / l, ny = gr.ny / l, tx = -ny, ty = nx;
+      const us = gr.pts.map(([x, y]) => x * tx + y * ty);
+      const ds = gr.pts.map(([x, y]) => x * nx + y * ny);
+      return { nx, ny, tx, ty, az: (Math.atan2(nx, ny) * 180 / Math.PI + 360) % 360,
+        u0: Math.min(...us), u1: Math.max(...us), d: Math.max(...ds), shop: gr.shop, lift };
+    }).filter((gr) => gr.u1 - gr.u0 > 0.8);
+  }
+
+  function pickWall(groups, richtung) {
+    if (richtung != null) {
+      const diff = (gr) => Math.abs(((gr.az - richtung + 540) % 360) - 180);
+      return groups.slice().sort((a, b) => diff(a) - diff(b))[0];
+    }
+    const pool = groups.some((gr) => gr.shop) ? groups.filter((gr) => gr.shop) : groups;
+    return pool.slice().sort((a, b) => (b.u1 - b.u0) - (a.u1 - a.u0))[0];
+  }
+
+  function addDecorMesh(id, positions, uvs, normal, indices, tex) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(positions.map((_, i) => normal[i % 3]), 3));
+    geo.setIndex(indices);
+    const mesh = new THREE.Mesh(geo, decorMat(tex));
+    mesh.frustumCulled = false;
+    mesh.visible = decorVisible();
+    scene.add(mesh);
+    if (!decor.has(id)) decor.set(id, []);
+    decor.get(id).push(mesh);
+  }
+
+  /** Flaches Schild vor einer Wand. */
+  function addSign(id, wall, s) {
+    const text = s.text || '';
+    const width = s.breite || Math.min((wall.u1 - wall.u0) * 0.85, 0.6 + text.length * 0.3);
+    const height = s.hoehe2 || 0.42;
+    const zc = (s.hoehe ?? SHOP_GROUND - 0.22) + wall.lift;
+    const uc = (wall.u0 + wall.u1) / 2 + (s.versatz || 0);
+    const d = wall.d + (s.abstand ?? 0.06);
+    const P = (du, dz) => [wall.nx * d + wall.tx * (uc + du), wall.ny * d + wall.ty * (uc + du), zc + dz];
+    const pts = [P(-width / 2, -height / 2), P(width / 2, -height / 2), P(width / 2, height / 2), P(-width / 2, height / 2)];
+    addDecorMesh(id, pts.flat(), [0, 0, 1, 0, 1, 1, 0, 1], [wall.nx, wall.ny, 0], [0, 1, 2, 0, 2, 3],
+      textTexture(text, s.farbe || '#2b2b2b', s.textFarbe || '#ffffff', width / height));
+  }
+
+  /** Schriftbogen (z. B. „VENEZIA“) als gebogenes Band mit zwei Stützen. */
+  function addArch(id, wall, b) {
+    const B = b.breite || 4, R = b.stich || 1.0, band = b.band || 0.55;
+    const z0 = (b.unten ?? SHOP_GROUND) + wall.lift;
+    const uc = (wall.u0 + wall.u1) / 2 + (b.versatz || 0);
+    const d = wall.d + (b.abstand ?? 0.35);
+    const P = (du, z) => [wall.nx * d + wall.tx * (uc + du), wall.ny * d + wall.ty * (uc + du), z];
+    const N = 32, pos = [], uv = [], idx = [];
+    for (let i = 0; i <= N; i++) {
+      const th = Math.PI * (1 - i / N);
+      pos.push(...P(Math.cos(th) * B / 2, z0 + Math.sin(th) * R + band * 0.5));            // außen
+      pos.push(...P(Math.cos(th) * (B / 2 - band), z0 + Math.sin(th) * (R - band * 0.6))); // innen
+      uv.push(i / N, 1, i / N, 0);
+      if (i < N) idx.push(2 * i, 2 * i + 1, 2 * i + 3, 2 * i, 2 * i + 3, 2 * i + 2);
+    }
+    const arcLen = Math.PI * (B / 2 + R) / 2;
+    addDecorMesh(id, pos, uv, [wall.nx, wall.ny, 0], idx, textTexture(b.text || '', b.farbe || '#f4f1ea', b.textFarbe || '#b3261e', arcLen / band));
+    // Stützen bis auf das Vordach
+    const plain = textTexture('', b.farbe || '#f4f1ea', '#000', 1);
+    for (const side of [-1, 1]) {
+      const u = side * (B / 2 - band / 2), w = 0.07, zb = z0 - (b.stuetze ?? 0.5);
+      const pts = [P(u - w, zb), P(u + w, zb), P(u + w, z0 + band * 0.5), P(u - w, z0 + band * 0.5)];
+      addDecorMesh(id, pts.flat(), [0, 0, 1, 0, 1, 1, 0, 1], [wall.nx, wall.ny, 0], [0, 1, 2, 0, 2, 3], plain);
+    }
+  }
+
+  /** Kachelmuster für Dachziegel (eine Textur = 8 × 8 Ziegel). */
+  function tileTexture(hex) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d');
+    const [r, gg, b] = hexRgb(hex || '#4e443b');
+    for (let row = 0; row < 8; row++) {
+      for (let k = 0; k < 9; k++) {
+        const f = 0.82 + ((row * 7 + k * 13) % 9) / 30;
+        g.fillStyle = `rgb(${r * f | 0},${gg * f | 0},${b * f | 0})`;
+        const x = (k - (row % 2) * 0.5) * 32;
+        g.fillRect(x, row * 32, 32, 32);
+        g.fillStyle = 'rgba(0,0,0,0.35)';
+        g.fillRect(x, row * 32, 2, 32);                    // Fuge senkrecht
+      }
+      g.fillStyle = 'rgba(0,0,0,0.45)';
+      g.fillRect(0, row * 32 + 27, 256, 5);                // Schatten unter jeder Ziegelreihe
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    tex.colorSpace = THREE.NoColorSpace;
+    return tex;
+  }
+
+  /** Eigenes Walmdach über der Grundfläche (konvexe Hülle, ausgerichtet am kleinsten umschließenden Rechteck). */
+  function addHipRoof(id, entry, bidx, lm) {
+    const { pos, info, bid, base, cx, cy, q } = entry.geo;
+    const pts = [];
+    let lift = 0;
+    for (let i = 0; i < bid.length; i++) {
+      if (bid[i] !== bidx || info[i * 4] !== 0) continue;
+      pts.push([cx + pos[i * 3] * q, cy + pos[i * 3 + 1] * q]);
+      lift = (base[i] * 0.1 - REF) * EXAG;
+    }
+    if (pts.length < 3) return;
+    // konvexe Hülle (Monotone Chain)
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => { const h = []; for (const p of list) { while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop(); h.push(p); } h.pop(); return h; };
+    let hull = [...half(pts), ...half(pts.slice().reverse())];
+    // Überstand: Hülle nach außen schieben
+    const over = lm.dach.ueberstand ?? 0.5;
+    const c0 = hull.reduce((a, p) => [a[0] + p[0] / hull.length, a[1] + p[1] / hull.length], [0, 0]);
+    hull = hull.map(([x, y]) => { const dx = x - c0[0], dy = y - c0[1], l = Math.hypot(dx, dy) || 1; return [x + dx / l * over, y + dy / l * over]; });
+    // kleinstes umschließendes Rechteck -> First entlang der langen Seite
+    let best = null;
+    for (let i = 0; i < hull.length; i++) {
+      const [x1, y1] = hull[i], [x2, y2] = hull[(i + 1) % hull.length];
+      const l = Math.hypot(x2 - x1, y2 - y1); if (l < 1e-6) continue;
+      const ax = [(x2 - x1) / l, (y2 - y1) / l], ay = [-ax[1], ax[0]];
+      const us = hull.map((p) => p[0] * ax[0] + p[1] * ax[1]), vs = hull.map((p) => p[0] * ay[0] + p[1] * ay[1]);
+      const area = (Math.max(...us) - Math.min(...us)) * (Math.max(...vs) - Math.min(...vs));
+      if (!best || area < best.area) best = { area, ax, ay, u0: Math.min(...us), u1: Math.max(...us), v0: Math.min(...vs), v1: Math.max(...vs) };
+    }
+    let { ax, ay, u0, u1, v0, v1 } = best;
+    if (v1 - v0 > u1 - u0) { [ax, ay] = [ay, ax.map((x) => -x)]; [u0, u1, v0, v1] = [v0, v1, -u1, -u0]; }
+    const L = u1 - u0, W = v1 - v0, um = (u0 + u1) / 2, vm = (v0 + v1) / 2;
+    const zE = (lm.wand?.bis ?? SHOP_GROUND) + lift;
+    const zR = zE + (W / 2) * Math.tan(((lm.dach.neigung ?? 38) * Math.PI) / 180);
+    const ridge = ([x, y]) => {
+      const u = Math.max(um - (L - W) / 2, Math.min(um + (L - W) / 2, x * ax[0] + y * ax[1]));
+      return [ax[0] * u + ay[0] * vm, ax[1] * u + ay[1] * vm, zR];
+    };
+    const posA = [], uvA = [], idx = [];
+    const tileTex = tileTexture(lm.dach.farbe);
+    for (let i = 0; i < hull.length; i++) {
+      const a = hull[i], b = hull[(i + 1) % hull.length];
+      const pa = [a[0], a[1], zE], pb = [b[0], b[1], zE], ra = ridge(a), rb = ridge(b);
+      const ex = [b[0] - a[0], b[1] - a[1]], el = Math.hypot(...ex) || 1, e = [ex[0] / el, ex[1] / el];
+      const nIn = [-e[1], e[0]];                                   // zur Mitte
+      const quad = [pa, pb, rb, ra];
+      const base0 = posA.length / 3;
+      for (const p of quad) {
+        posA.push(...p);
+        const dist = (p[0] - a[0]) * nIn[0] + (p[1] - a[1]) * nIn[1];
+        uvA.push(((p[0] - a[0]) * e[0] + (p[1] - a[1]) * e[1]) / 2.4, (dist / Math.cos(((lm.dach.neigung ?? 38) * Math.PI) / 180)) / 2.0);
+      }
+      idx.push(base0, base0 + 1, base0 + 2, base0, base0 + 2, base0 + 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(posA, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvA, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, decorMat(tileTex));
+    mesh.frustumCulled = false; mesh.visible = decorVisible(); scene.add(mesh);
+    if (!decor.has(id)) decor.set(id, []);
+    decor.get(id).push(mesh);
+    // Traufbrett rundum
+    const fascia = lm.dach.traufe;
+    if (fascia) {
+      const fp = [], fu = [], fi = [];
+      for (let i = 0; i < hull.length; i++) {
+        const a = hull[i], b = hull[(i + 1) % hull.length], k = fp.length / 3;
+        fp.push(a[0], a[1], zE - 0.38, b[0], b[1], zE - 0.38, b[0], b[1], zE + 0.02, a[0], a[1], zE + 0.02);
+        fu.push(0, 0, 1, 0, 1, 1, 0, 1);
+        fi.push(k, k + 1, k + 2, k, k + 2, k + 3);
+      }
+      const g2 = new THREE.BufferGeometry();
+      g2.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
+      g2.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2));
+      g2.setIndex(fi);
+      g2.computeVertexNormals();
+      const m2 = new THREE.Mesh(g2, decorMat(textTexture('', fascia, '#000', 1)));
+      m2.frustumCulled = false; m2.visible = decorVisible(); scene.add(m2);
+      decor.get(id).push(m2);
+    }
+  }
+
+  function clearDecor(id) {
+    for (const m of decor.get(id) || []) { scene.remove(m); m.geometry.dispose(); m.material.uniforms.uMap.value.dispose(); m.material.dispose(); }
+    decor.delete(id);
+  }
+
+  function buildDecor(entry, bidx) {
+    const rec = entry.records[bidx];
+    const lm = landmarks.get(rec.id);
+    clearDecor(rec.id);
+    if (!lm || !scene) return;
+    const signs = [...(lm.schilder || [])];
+    if (lm.laden?.schild) signs.unshift({ text: lm.laden.schild, farbe: lm.laden.schildFarbe, textFarbe: lm.laden.textFarbe, richtung: lm.laden.richtung });
+    if (lm.dach?.form === 'walm') addHipRoof(rec.id, entry, bidx, lm);
+    if (!signs.length && !lm.bogen) { map?.triggerRepaint(); return; }
+    const groups = wallGroups(entry, bidx);
+    if (!groups.length) return;
+    for (const s of signs) addSign(rec.id, pickWall(groups, s.richtung), s);
+    if (lm.bogen) addArch(rec.id, pickWall(groups, lm.bogen.richtung), lm.bogen);
+    map?.triggerRepaint();
   }
 
   async function loadTile(t) {
@@ -577,7 +888,7 @@ export function createBuildingLayer({ onProgress } = {}) {
           uTile: { value: t.i },
           uRoofTex: { value: roofTex || emptyTex },
           uHasTex: { value: roofTex ? 1 : 0 },
-          ...(([st, rs]) => ({ uStyle: { value: st }, uRoofStyle: { value: rs } }))(styleTexture(records)),
+          ...(([st, ex]) => ({ uStyle: { value: st }, uExtra: { value: ex } }))(styleTexture(records)),
         },
       });
       const mesh = new THREE.Mesh(geo, mat);
@@ -587,7 +898,8 @@ export function createBuildingLayer({ onProgress } = {}) {
       mesh.userData = { tile: t };
       mesh.visible = visible;
       scene.add(mesh);
-      Object.assign(entry, { state: 'ready', mesh, records, tile: t });
+      Object.assign(entry, { state: 'ready', mesh, records, tile: t, geo: { pos, nrm, info, bid, base, cx, cy, q } });
+      records.forEach((rec, i) => { if (landmarks.has(rec.id)) buildDecor(entry, i); });
     } catch (e) {
       tiles.delete(t.k);
       console.warn('Kachel', t.k, 'nicht geladen', e);
@@ -716,6 +1028,22 @@ export function createBuildingLayer({ onProgress } = {}) {
     },
     toLocal: (lng, lat) => toLocal(lng, lat),
     landmark: (id) => landmarks.get(id),
+    /** Aussehen eines Gebäudes setzen (null = zurück zur Regel) und sofort neu zeichnen. */
+    setLandmark(id, entry) {
+      if (entry) landmarks.set(id, entry); else landmarks.delete(id);
+      for (const t of tiles.values()) {
+        if (t.state !== 'ready') continue;
+        const bidx = t.records.findIndex((r) => r.id === id);
+        if (bidx < 0) continue;
+        const u = t.mesh.material.uniforms;
+        u.uStyle.value.dispose(); u.uExtra.value.dispose();
+        [u.uStyle.value, u.uExtra.value] = styleTexture(t.records);
+        buildDecor(t, bidx);
+      }
+      map?.triggerRepaint();
+    },
+    landmarks: () => landmarks,
+    ready,
     facade: (id) => facades.get(id),
     toLngLat: (x, y) => toLngLat(x, y),
     setVisible(v) {
@@ -723,6 +1051,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       for (const t of tiles.values()) if (t.mesh) t.mesh.visible = v;
       for (const m of treeMeshes) m.visible = v;
       for (const m of photoMeshes) m.visible = v;
+      for (const list of decor.values()) for (const m of list) m.visible = v;
       map?.triggerRepaint();
     },
     get count() { return index ? index.tiles.reduce((s, t) => s + t.n, 0) : 0; },
