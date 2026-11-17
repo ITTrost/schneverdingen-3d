@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Fassadenfarben aus Mapillary-Straßenfotos messen.
+"""Fassadenfarben aus Mapillary-Straßenfotos messen – EXPERIMENTELL, Ergebnisse derzeit nicht verwendet.
+
+Stand 11/2026: In Schneverdingen stammen die Mapillary-Bilder überwiegend von Dashcams (Blaustich durch
+die Scheibe, ungenaue Kameralage, viele Verdeckungen durch Bäume und Autos). Eine Stichprobe ergab zu viele
+Fehler (Klinkerhäuser als Putz erkannt), deshalb liegt keine data/facades.json im Repository. Die Karte
+liest die Datei nur, wenn sie vorhanden ist.
 
 Aufruf:
     python3 tools/facades_mapillary.py <ordner-mit-gml> <dem.npz> <arbeitsordner> data/facades.json [W,S,E,N]
@@ -37,9 +42,11 @@ API = 'https://graph.mapillary.com'
 TOKEN_HEADER = os.environ.get('MAPILLARY_AUTH', 'Authorization: Bearer proxy-injected')
 FIELDS = 'id,computed_geometry,computed_rotation,camera_parameters,camera_type,thumb_1024_url,captured_at'
 CAM_HEIGHT = 1.6       # Meter über Grund (Auto oder Fußgänger)
-MAX_DIST = 55          # Meter
+MAX_DIST = 35          # Meter (weiter weg: Kameralage zu ungenau, zu viel verdeckt)
 MIN_YEAR = 2017
 RES = (512, 288)       # Auflösung des Sichtbarkeitspuffers
+MIN_IMAGES = 3         # so viele Fotos müssen ein Gebäude zeigen
+MIN_AGREE = 0.75       # so einig müssen sie sich beim Material sein
 
 to_utm = Transformer.from_crs(4326, 25832, always_xy=True)
 to_wgs = Transformer.from_crs(25832, 4326, always_xy=True)
@@ -216,20 +223,46 @@ def analyse(images, walls, dem, work):
         good = (mx > 45) & (mx < 245) & ~((g > r + 6) & (g > b)) & ~((b > r + 12) & (mx > 120))
         for k, bid in drawn.items():
             m = (ids == k) & good
-            if m.sum() >= 60:
-                samples[bid].append((np.median(photo[m], axis=0), int(m.sum())))
+            if m.sum() < 150:     # zu kleine oder stark verdeckte Wandflächen auslassen
+                continue
+            px = photo[m].astype(float)
+            lum = px.mean(1)
+            lo, hi = np.percentile(lum, [35, 95])
+            px = px[(lum >= lo) & (lum <= hi)]          # Fenster, Schatten und Spitzlichter raus
+            if len(px) < 30:
+                continue
+            red = (px[:, 0] - px[:, 2]) / (px.sum(1) + 1)
+            brick = red > 0.07                            # Klinker bleibt auch im Schatten rötlich
+            med_b = np.median(px[brick], 0) if brick.sum() >= 10 else None
+            med_l = np.median(px[~brick], 0) if (~brick).sum() >= 10 else None
+            samples[bid].append((float(brick.mean()), med_b, med_l, len(px)))
         if n_im % 25 == 0:
             print(f'[{n_im + 1}/{len(images)}] Gebäude mit Messungen: {len(samples)}', flush=True)
     return samples
 
 
-def classify(rgb):
-    r, g, b = [x / 255 for x in rgb]
-    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-    deg = h * 360
-    if (deg < 32 or deg > 345) and s > 0.22 and v < 0.8:
-        return 'klinker'
-    return 'putz'
+def wmedian(cols, weights):
+    cols, weights = np.array(cols), np.array(weights, dtype=float)
+    out = []
+    for ch in range(3):
+        o = np.argsort(cols[:, ch])
+        cw = np.cumsum(weights[o])
+        out.append(cols[o, ch][np.searchsorted(cw, cw[-1] / 2)])
+    return out
+
+
+def normalize(rgb, material):
+    """Farbton und Sättigung aus dem Foto, Helligkeit auf typische Werte des Materials (Belichtungsausgleich)."""
+    h, s, v = colorsys.rgb_to_hsv(*[x / 255 for x in rgb])
+    if material == 'klinker':
+        s = min(max(s, 0.35), 0.72)
+        v = min(max(v * 1.6, 0.36), 0.62)
+    else:
+        if 0.5 < h < 0.72:          # bläulicher Schattenstich bei hellem Putz
+            s *= 0.3
+        s = min(s, 0.28)
+        v = min(max(v * 1.8, 0.62), 0.93)
+    return [round(x * 255) for x in colorsys.hsv_to_rgb(h, s, v)]
 
 
 def main():
@@ -239,22 +272,29 @@ def main():
     images = find_images(bbox, work)
     print(len(images), 'Bilder nach Ausdünnung', flush=True)
     walls = load_walls(gml, bbox)
-    samples = analyse(images, walls, Dem(dem_path), work)
+    import pickle
+    cache = os.path.join(work, f'samples_{MAX_DIST}.pkl')
+    if os.path.exists(cache):
+        samples = pickle.load(open(cache, 'rb'))
+    else:
+        samples = analyse(images, walls, Dem(dem_path), work)
+        pickle.dump(dict(samples), open(cache, 'wb'))
     result = {}
     for bid, ss in samples.items():
-        px = sum(n for _, n in ss)
-        if len(ss) < 2 and px < 300:
+        px = sum(s[3] for s in ss)
+        if len(ss) < MIN_IMAGES:
             continue
-        cols = np.array([c for c, _ in ss])
-        weights = np.array([n for _, n in ss], dtype=float)
-        # gewichteter Median je Kanal
-        med = []
-        for ch in range(3):
-            o = np.argsort(cols[:, ch])
-            cw = np.cumsum(weights[o])
-            med.append(cols[o, ch][np.searchsorted(cw, cw[-1] / 2)])
-        rgb = [int(round(min(255, x * 1.08))) for x in med]  # Fotos sind meist etwas dunkler als die Fassade
-        result[bid] = ['#%02x%02x%02x' % tuple(rgb), classify(rgb), len(ss)]
+        # jedes Foto stimmt ab; nur eindeutige Gebäude übernehmen
+        votes = [s[0] > 0.45 for s in ss]
+        share = sum(votes) / len(votes)
+        if MIN_AGREE > share > 1 - MIN_AGREE:
+            continue
+        material = 'klinker' if share >= MIN_AGREE else 'putz'
+        pick = [(s[1], s[3]) for s in ss if s[1] is not None] if material == 'klinker' else [(s[2], s[3]) for s in ss if s[2] is not None]
+        if not pick:
+            continue
+        rgb = normalize(wmedian([c for c, _ in pick], [w for _, w in pick]), material)
+        result[bid] = ['#%02x%02x%02x' % tuple(rgb), material, len(ss)]
     json.dump({'quelle': 'Gemessen in Straßenfotos von Mapillary-Mitwirkenden (CC BY-SA 4.0), tools/facades_mapillary.py',
                'lizenz': 'CC BY-SA 4.0', 'gebaeude': result}, open(out, 'w'), separators=(',', ':'))
     print(len(result), 'Gebäude mit Fassadenfarbe ->', out)
