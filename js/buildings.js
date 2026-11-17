@@ -20,8 +20,10 @@ in float aU;
 in float aBid;
 in float aBase;
 in vec2 aUv;
+in float aFh;
 uniform float uExag;
 out vec2 vUv;
+flat out float vFh;
 out vec3 vN;
 out vec3 vP;
 out float vU;
@@ -36,6 +38,7 @@ void main() {
   vInfo = aInfo;
   vBid = aBid;
   vUv = aUv;
+  vFh = aFh * 0.1;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
@@ -55,12 +58,15 @@ uniform float uHasTex;
 uniform sampler2D uStyle;
 uniform sampler2D uRoofStyle; // je Gebäude: rgb Dachfarbe, a > 0.5 = statt Luftbild verwenden   // je Gebäude (x) und Gebäudeteil (y): rgb Farbe, a = Material | Fenster << 4
 in vec2 vUv;
+flat in float vFh;
 in vec3 vN;
 in vec3 vP;
 in float vU;
 flat in vec4 vInfo;
 flat in float vBid;
 out vec4 outColor;
+
+const float SHOP_GROUND = 3.8; // Höhe des Ladengeschosses (tools/build_lod2.py)
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
@@ -143,7 +149,8 @@ void main() {
   float cls = floor(vInfo.z + 0.5);
   float infoW = floor(vInfo.w + 0.5);
   float hasTex = mod(infoW, 2.0);
-  float part = min(floor(infoW / 2.0), float(textureSize(uStyle, 0).y - 1));
+  bool shopWall = infoW > 127.5;   // Bit 7: Ladenfront (tools/build_lod2.py)
+  float part = min(mod(floor(infoW / 2.0), 64.0), float(textureSize(uStyle, 0).y - 1));
   vec4 st = texelFetch(uStyle, ivec2(int(vBid + 0.5), int(part)), 0);
   float sa = floor(st.a * 255.0 + 0.5);
   float mat = mod(sa, 16.0);          // 0 Regel, 1 Klinker, 2 Putz, 3 Feldstein, 4 Holz, 5 Fachwerk
@@ -206,13 +213,42 @@ void main() {
   float far = smoothstep(0.35, 0.9, px);
   vec3 glass = mix(vec3(0.15, 0.19, 0.24), uSky, 0.25) * (0.7 + 0.5 * diff);
 
-  if (wall && win == 2.0 && abs(n.z) < 0.4) {
-    float z = vP.z - 0.9;
-    float row = floor(z / 3.0);
-    float fz = fract(z / 3.0);
+  // Ladenfront im Erdgeschoss: Sockel, Schaufenster mit Sprossen, Markise, Schildband
+  bool shopFront = shopWall && (cls == 0.0 || cls == 5.0) && abs(n.z) < 0.4 && vP.z < SHOP_GROUND;
+  if (shopFront) {
+    float z = vP.z;
+    float k = mod(seed, 6.0);
+    vec3 awn = k < 1.0 ? vec3(0.62, 0.13, 0.13) : k < 2.0 ? vec3(0.17, 0.36, 0.22) : k < 3.0 ? vec3(0.13, 0.22, 0.36)
+             : k < 4.0 ? vec3(0.44, 0.11, 0.18) : k < 5.0 ? vec3(0.78, 0.69, 0.52) : vec3(0.30, 0.30, 0.31);
+    vec3 lightIn = amb * ao + uSun * diff * 1.15;
+    float frame = 1.0 - smoothstep(0.03, 0.12, px);      // Rahmen nur aus der Nähe
+    float mull = step(fract(vU / 1.8), 0.045) * frame;
+    vec3 inside = mix(vec3(0.10, 0.10, 0.09), vec3(1.0, 0.84, 0.58), 0.18 + 0.7 * uNight);
+    vec3 shopGlass = mix(inside, uSky * 0.75, 0.3 * (1.0 - uNight)) * (0.75 + 0.35 * diff * (1.0 - uNight));
+    if (z < 0.35) {
+      col = vec3(0.30, 0.29, 0.28) * lightIn;                                   // Sockel
+    } else if (z < SHOP_GROUND - 1.05) {
+      col = mix(shopGlass + inside * 0.35 * uNight, vec3(0.20, 0.20, 0.21) * lightIn, mull);
+    } else if (z < SHOP_GROUND - 0.45) {
+      float stripe = step(0.5, fract(vU / 0.45)) * frame;                        // Markise
+      float drop = smoothstep(SHOP_GROUND - 1.05, SHOP_GROUND - 0.95, z);
+      col = mix(awn, mix(awn, vec3(0.92, 0.90, 0.86), 0.55), stripe * 0.6) * lightIn * mix(0.7, 1.0, drop);
+    } else {
+      col = mix(base, base * 0.8, 0.5) * lightIn;                               // Schildband
+    }
+  }
+
+  // Wohnfenster: Geschosshöhe aus den Daten, Fensterraster mittig in der Wand
+  if (wall && win == 2.0 && abs(n.z) < 0.4 && !shopFront && vU >= 0.0) {
+    float fh = max(vFh, 2.4);
+    float z0 = shopWall ? SHOP_GROUND : 0.0;
+    float z = vP.z - z0;
+    float row = floor(z / fh);
+    float fz = fract(z / fh);
     float cell = floor(vU / 2.7);
     float fx = fract(vU / 2.7);
-    if (z > 0.0 && fz < 0.46 && fx > 0.28 && fx < 0.72 && vU > 0.9) {
+    float sill = 0.85 / fh, head = min(0.9, (0.85 + 1.35) / fh);
+    if (z > 0.0 && fz > sill && fz < head && fx > 0.28 && fx < 0.72) {
       float h = hash(vec2(cell + vBid * 13.17 + uTile * 3.1, row + seed * 0.37));
       vec3 warm = mix(vec3(1.0, 0.72, 0.38), vec3(1.0, 0.88, 0.62), hash(vec2(h, row)));
       float lit = step(h, 0.45) * uNight;
@@ -515,9 +551,10 @@ export function createBuildingLayer({ onProgress } = {}) {
       const bid = take(Uint16Array, n);
       const base = take(Int16Array, n);
       const uv = take(Uint16Array, n * 2);
+      const fh = take(Uint8Array, n);
       // Geländehöhe (überhöht) direkt in die Positionen einrechnen, damit auch das Anklicken stimmt
       for (let i = 0; i < n; i++) pos[i * 3 + 2] += Math.round(((base[i] * 0.1 - REF) * EXAG) / q);
-      if (n > 65535 && off % 4) off += 4 - (off % 4); // Uint32-Indizes sind ausgerichtet
+      if (off % 4) off += 4 - (off % 4); // Indizes sind auf 4 Byte ausgerichtet
       const idx = n > 65535 ? take(Uint32Array, ni) : take(Uint16Array, ni);
 
       const geo = new THREE.BufferGeometry();
@@ -528,6 +565,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       geo.setAttribute('aBid', new THREE.BufferAttribute(bid, 1));
       geo.setAttribute('aBase', new THREE.BufferAttribute(base, 1));
       geo.setAttribute('aUv', new THREE.BufferAttribute(uv, 2, true));
+      geo.setAttribute('aFh', new THREE.BufferAttribute(fh, 1));
       geo.setIndex(new THREE.BufferAttribute(idx, 1));
       geo.computeBoundingSphere();
       const mat = new THREE.RawShaderMaterial({

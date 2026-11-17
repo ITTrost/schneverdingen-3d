@@ -2,7 +2,10 @@
 """LoD2-Gebäudemodelle des LGLN (CityGML) in kompakte Binärkacheln für den Browser umwandeln.
 
 Aufruf:
-    python3 tools/build_lod2.py <ordner-mit-gml> data/lod2 [<dem.npz> [<ordner-mit-luftbildern>]]
+    python3 tools/build_lod2.py <ordner-mit-gml> data/lod2 [<dem.npz> [<ordner-mit-luftbildern> [<osm.json>]]]
+
+osm.json (tools/osm_context.py): Geschäfte und Straßen aus OpenStreetMap. Häuser mit einem Geschäft
+bekommen an den Wänden zur Straße eine Ladenfront im Erdgeschoss.
 
 Mit dem Höhenraster aus tools/build_dem.py bekommt jedes Gebäude seine Geländehöhe
 (aus demselben Raster wie die Geländekacheln, damit Gebäude und Gelände zusammenpassen).
@@ -210,6 +213,97 @@ def facade_class(rec, height, area, roof):
     return F_HOUSE
 
 
+# Geschäfte, die eine Ladenfront bekommen (Klassen aus den OpenMapTiles-POIs)
+SHOP_CLASSES = {'shop', 'grocery', 'bakery', 'clothing_store', 'cafe', 'restaurant', 'fast_food', 'bar', 'beer',
+                'ice_cream', 'pharmacy', 'bank', 'hairdresser', 'alcohol_shop', 'florist', 'butcher', 'optician',
+                'shoes', 'jewelry', 'books', 'gift', 'furniture', 'hardware', 'mobile_phone', 'laundry', 'music',
+                'pet', 'travel_agency', 'cosmetics', 'art_gallery', 'music_store', 'ice_cream_parlour'}
+# ALKIS-Gebäudefunktionen mit Läden im Erdgeschoss (Wohn-/Geschäftshaus, Handel und Dienstleistungen)
+SHOP_FUNCTIONS = {'31001_1120', '31001_1121', '31001_1122', '31001_1123', '31001_1130', '31001_1131',
+                  '31001_2010', '31001_2050', '31001_2051', '31001_2310'}
+STREET_CLASSES = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'path'}  # ohne Zufahrten
+SHOP_GROUND = 3.8   # Höhe des Ladengeschosses (muss zum Shader in js/buildings.js passen)
+WIN_CELL = 2.7      # Fensterraster in Metern (Shader)
+
+
+class OsmContext:
+    """Geschäfte (Punkte) und Straßen (verdichtete Punkte) in UTM, mit schneller Abstandssuche."""
+
+    def __init__(self, path):
+        from scipy.spatial import cKDTree
+        d = json.load(open(path))
+        to_utm = Transformer.from_crs(4326, 25832, always_xy=True)
+        shops = [p for p in d['pois'] if p[2] in SHOP_CLASSES or (p[2] == 'post' and p[3] == 'post_office')]
+        if shops:
+            e, n = to_utm.transform([p[0] for p in shops], [p[1] for p in shops])
+            self.shop_xy = np.stack([e, n], 1)
+            self.shop_names = [p[4] for p in shops]
+            self.shop_tree = cKDTree(self.shop_xy)
+        else:
+            self.shop_tree = None
+        pts = []
+        for cls, line in d['roads']:
+            if cls not in STREET_CLASSES:
+                continue
+            e, n = to_utm.transform([q[0] for q in line], [q[1] for q in line])
+            ln = np.stack([e, n], 1)
+            for a, b in zip(ln[:-1], ln[1:]):
+                k = max(1, int(np.linalg.norm(b - a) / 2))
+                pts.append(a + (b - a) * (np.arange(k)[:, None] / k))
+        self.road_tree = cKDTree(np.concatenate(pts))
+        print(len(shops), 'Geschäfte,', self.road_tree.n, 'Straßenpunkte', flush=True)
+
+    def assign(self, path):
+        """Jedes Geschäft der Kachel genau einem Gebäude zuordnen: dem, in dem es liegt, sonst dem nächsten (≤ 6 m)."""
+        from shapely.geometry import Point, Polygon
+        from shapely.strtree import STRtree
+        self.by_building = {}
+        if self.shop_tree is None:
+            return
+        polys, ids = [], []
+        for _, bel in etree.iterparse(path, tag=B + 'Building'):
+            if bel.getparent().tag != '{%s}cityObjectMember' % NS['core']:
+                continue
+            bid = bel.get(G + 'id')
+            for gs in bel.iter(B + 'GroundSurface'):
+                for pl in gs.iter(G + 'posList'):
+                    v = poslist(pl)
+                    if len(v) >= 4:
+                        polys.append(Polygon(v[:, :2]))
+                        ids.append(bid)
+            bel.clear()
+        if not polys:
+            return
+        tree = STRtree(polys)
+        x0, y0 = min(p.bounds[0] for p in polys), min(p.bounds[1] for p in polys)
+        x1, y1 = max(p.bounds[2] for p in polys), max(p.bounds[3] for p in polys)
+        for i, (x, y) in enumerate(self.shop_xy):
+            if not (x0 - 6 <= x <= x1 + 6 and y0 - 6 <= y <= y1 + 6):
+                continue
+            pt = Point(x, y)
+            j = tree.nearest(pt)
+            if polys[j].distance(pt) <= 6:
+                self.by_building.setdefault(ids[j], []).append(self.shop_names[i] or '')
+
+    def shops_at(self, bid):
+        return self.by_building.get(bid, [])
+
+    def faces_street(self, mid, normal):
+        """Zeigt eine Wand (Mitte, Außennormale) auf eine Straße in bis zu 22 m Abstand?"""
+        samples = mid[None] + normal[None] * np.arange(3, 18, 2.5)[:, None]
+        d, _ = self.road_tree.query(samples)
+        return bool((d < 4.5).any())
+
+
+def floor_height(eave, shop):
+    """Geschosshöhe so wählen, dass ganze Geschosse bis zur Traufe passen."""
+    h = eave - (SHOP_GROUND if shop else 0.3)
+    if h < 2.0:
+        return 3.0
+    n = max(1, round(h / 2.85))
+    return float(min(max(h / n, 2.5), 4.2))
+
+
 class Dem:
     def __init__(self, path):
         d = np.load(path)
@@ -230,8 +324,10 @@ class Dem:
 SKIRT = 4.0  # Wände so weit unter den Boden ziehen, dass an Hängen keine Lücken entstehen
 
 
-def build_tile(path, dem=None):
-    verts, norms, info, us, bids, tris, bases, utms = [], [], [], [], [], [], [], []
+def build_tile(path, dem=None, osm=None):
+    if osm:
+        osm.assign(path)
+    verts, norms, info, us, bids, tris, bases, utms, fhs = [], [], [], [], [], [], [], [], []
     roof_boxes = {}  # bid -> [Emin, Nmin, Emax, Nmax] der Dachflächen
     records = []
     nverts = 0
@@ -261,6 +357,15 @@ def build_tile(path, dem=None):
         records.append(rec)
         cls = facade_class(rec, top - ground, footprint_area(grounds), rec['r'])
         seed = zlib.crc32(rec['id'].encode()) & 0xFF
+        shops = osm.shops_at(rec['id']) if (osm and cls in (F_HOUSE, F_HEIDEHOF)) else []
+        if shops:
+            rec['l'] = [x for x in shops if x][:3] or ['Geschäft']
+        elif osm and cls == F_HOUSE and rec['fc'] in SHOP_FUNCTIONS:
+            shops = ['']   # laut ALKIS Geschäftshaus, aber kein Geschäft in OSM eingetragen
+        tr = attr(bel, 'MittlereTraufHoehe')
+        eave = (float(tr) - ground) if tr else (top - ground)
+        fh = floor_height(min(max(eave, 2.5), top - ground), bool(shops))
+        street_walls = []
         for kind, ring, part in polys:
             loc = to_local(ring)
             loc[:, 2] -= ground
@@ -275,26 +380,49 @@ def build_tile(path, dem=None):
             if kind == 0:
                 ring2 = ring2.copy()
                 ring2[ring2[:, 2] < 0.05, 2] = -SKIRT
-            # Fassadenkoordinate u: Abstand entlang der Wand (horizontal)
+            # Fassadenkoordinate u: Abstand entlang der Wand (horizontal), so gestreckt, dass ganze
+            # Fensterachsen hineinpassen (Fenster sitzen dann mittig, nie halb an der Hauskante)
+            shopwall = False
             if kind == 0:
                 d = np.array([-n[1], n[0]])
                 dl = np.linalg.norm(d)
                 d = d / dl if dl > 1e-6 else np.array([1.0, 0.0])
                 u = (ring2[:, :2] - ring2[0, :2]) @ d
                 u -= u.min()
+                L = float(u.max())
+                if L < 1.6:
+                    u = np.full(len(u), -1.0)        # zu schmal für Fenster
+                else:
+                    u = u * (max(1, round(L / WIN_CELL)) * WIN_CELL) / L
+                if shops and abs(n[2]) < 0.4 and L > 2.5 and ring[:, 2].min() - ground < 0.5:
+                    nh = np.array([n[0], n[1]]) / max(1e-6, np.hypot(n[0], n[1]))
+                    mid = utm[:, :2].mean(0)
+                    shopwall = osm.faces_street(mid, nh)
+                    if not shopwall:  # Ersatz, falls keine Wand direkt zur Straße zeigt: die nächstgelegene
+                        dist = float(osm.road_tree.query(mid + nh * 4)[0])
+                        street_walls.append((dist, len(info)))
+                    else:
+                        street_walls.append((-1.0, None))
             else:
                 u = np.zeros(len(ring2))
             verts.append(ring2)
             norms.append(np.repeat(n[None, :], len(ring2), axis=0))
             flags = cls
             # info[3]: Bit 0 = Dach mit Luftbild (make_atlas), Bit 1–7 = Gebäudeteil
-            info.append(np.repeat(np.array([[kind, seed, flags, min(part, 63) << 1]], dtype=np.uint8), len(ring2), axis=0))
+            # info[3]: Bit 0 = Dach mit Luftbild (make_atlas), Bit 1–6 = Gebäudeteil, Bit 7 = Ladenfront
+            info.append(np.repeat(np.array([[kind, seed, flags, (min(part, 63) << 1) | (128 if shopwall else 0)]],
+                                           dtype=np.uint8), len(ring2), axis=0))
+            fhs.append(np.full(len(ring2), round(fh * 10), dtype=np.uint8))
             us.append(u)
             bids.append(np.full(len(ring2), bid, dtype=np.uint16))
             bases.append(np.full(len(ring2), round(base * 10), dtype=np.int16))
             utms.append(utm[:, :2])
             tris.append(tri + nverts)
             nverts += len(ring2)
+        if shops and street_walls and all(i is not None for _, i in street_walls):
+            best = min(street_walls)[1]
+            info[best] = info[best].copy()
+            info[best][:, 3] |= 128
         bel.clear()
         while bel.getprevious() is not None:
             del bel.getparent()[0]
@@ -305,6 +433,7 @@ def build_tile(path, dem=None):
         'pos': V, 'nrm': np.concatenate(norms), 'info': np.concatenate(info),
         'u': np.concatenate(us), 'bid': np.concatenate(bids), 'idx': np.concatenate(tris).astype(np.uint32),
         'base': np.concatenate(bases), 'utm': np.concatenate(utms), 'roof_boxes': roof_boxes,
+        'fh': np.concatenate(fhs),
     }, records
 
 
@@ -384,6 +513,7 @@ def write_tile(geo, out_bin):
     Kopf: 'SV3D', uint32 nVerts, uint32 nIdx, float32 cx, cy (Kachelmitte, lokale Meter), float32 quant
     Daten: int16[3n] pos (z über Gebäudegrund), int8[4n] normal, uint8[4n] info, int16[n] u (dm),
           uint16[n] bid, int16[n] Geländehöhe (dm NHN), uint16[2n] Dach-UV (0..65535, Atlas),
+          uint8[n] Geschosshöhe (dm), Auffüllung auf 4 Byte,
           [Auffüllung auf 4 Byte, nur bei uint32], uint16|uint32[nIdx] idx
     """
     V = geo['pos']
@@ -406,8 +536,8 @@ def write_tile(geo, out_bin):
         f.write(geo['bid'].tobytes())
         f.write(geo['base'].tobytes())
         f.write(geo.get('uv', np.zeros((n, 2), dtype=np.uint16)).tobytes())
-        if big:
-            f.write(b'\0' * ((-f.tell()) % 4))  # Uint32-Indizes auf 4 Byte ausrichten
+        f.write(geo['fh'].tobytes())
+        f.write(b'\0' * ((-f.tell()) % 4))  # Indizes auf 4 Byte ausrichten
         f.write(idx.astype(np.uint32 if big else np.uint16).tobytes())
         # auf 4 Byte auffüllen
         f.write(b'\0' * ((-f.tell()) % 4))
@@ -417,7 +547,8 @@ def write_tile(geo, out_bin):
 def main():
     src, dst = sys.argv[1], sys.argv[2]
     dem = Dem(sys.argv[3]) if len(sys.argv) > 3 else None
-    dop_dir = sys.argv[4] if len(sys.argv) > 4 else None
+    dop_dir = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else None
+    osm = OsmContext(sys.argv[5]) if len(sys.argv) > 5 else None
     os.makedirs(dst, exist_ok=True)
     index = []
     files = sorted(glob.glob(os.path.join(src, 'LoD2_32_*_1_ni.gml')))
@@ -425,7 +556,7 @@ def main():
         name = os.path.basename(path)
         e, n = name.split('_')[2:4]
         key = f'{e}_{n}'
-        geo, records = build_tile(path, dem)
+        geo, records = build_tile(path, dem, osm)
         if geo is None:
             continue
         atlas = None

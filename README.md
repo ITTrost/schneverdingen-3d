@@ -69,10 +69,11 @@ Das LGLN bietet das DGM1 über einen WMS an, allerdings nur als 8-Bit-Graustufen
 pip install scipy pillow
 python3 tools/build_dem.py arbeitsordner data/dem
 python3 tools/fetch_dop.py gml luftbilder        # Luftbilder für die Dächer (194 × ~4 MB)
-python3 tools/build_lod2.py gml data/lod2 arbeitsordner/dem.npz luftbilder
+python3 tools/osm_context.py osm.json                # Geschäfte und Straßen aus OpenStreetMap
+python3 tools/build_lod2.py gml data/lod2 arbeitsordner/dem.npz luftbilder osm.json
 ```
 
-Für jede Kachel schneidet `build_lod2.py` die Dächer aus dem Luftbild aus und packt sie in einen Atlas (`data/lod2/<E>_<N>.jpg`, zusammen etwa 15 MB). Die Fassadenregeln stehen in `facade_class()` in `tools/build_lod2.py` und im Shader in `js/buildings.js`.
+Für jede Kachel schneidet `build_lod2.py` die Dächer aus dem Luftbild aus und packt sie in einen Atlas (`data/lod2/<E>_<N>.jpg`, zusammen etwa 15 MB). Läden im Erdgeschoss bekommen Gebäude, in denen OpenStreetMap ein Geschäft kennt oder die laut ALKIS Wohn- und Geschäftshäuser sind, und zwar nur an den Wänden zur Straße. Fenster folgen der echten Geschosshöhe (aus der Traufhöhe) und sitzen mittig in der Wand. Die Fassadenregeln stehen in `facade_class()` in `tools/build_lod2.py` und im Shader in `js/buildings.js`.
 
 Die Überhöhung steht in `js/buildings.js` (`EXAG`). Mehr als 4,5-fach geht nicht, ohne das Datenformat zu ändern.
 
