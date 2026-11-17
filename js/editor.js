@@ -163,5 +163,6 @@ export function initEditor({ map, buildings }) {
     if (!hit) return;
     current = { id: hit.record.id, rec: hit.record };
     renderForm();
+    setTimeout(() => buildings.select(null), 0); // keine lila Markierung, damit die Farben sichtbar bleiben
   });
 }

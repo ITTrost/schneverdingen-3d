@@ -294,6 +294,7 @@ body.editing .layers { display: none; }
 .ed-form > label { grid-template-columns: auto 1fr; }
 .ed-form > label input { max-width: none; }
 .ed-color { display: inline-flex; align-items: center; gap: 4px; }
+.ed-form label:has(.ed-color + .ed-color) { grid-template-columns: 1fr auto auto; }
 .ed-color input[type="color"] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: none; }
 .ed-check { grid-template-columns: auto 1fr !important; justify-content: start; }
 .ed-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
