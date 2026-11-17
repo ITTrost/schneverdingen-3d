@@ -52,7 +52,8 @@ uniform float uSelTile;
 uniform float uSel;
 uniform sampler2D uRoofTex;
 uniform float uHasTex;
-uniform sampler2D uStyle;   // je Gebäude (x) und Gebäudeteil (y): rgb Farbe, a = Material | Fenster << 4
+uniform sampler2D uStyle;
+uniform sampler2D uRoofStyle; // je Gebäude: rgb Dachfarbe, a > 0.5 = statt Luftbild verwenden   // je Gebäude (x) und Gebäudeteil (y): rgb Farbe, a = Material | Fenster << 4
 in vec2 vUv;
 in vec3 vN;
 in vec3 vP;
@@ -184,7 +185,11 @@ void main() {
   vec3 amb = mix(uGround, uSky, n.z * 0.5 + 0.5);
   float ao = wall ? mix(0.6, 1.0, smoothstep(0.0, 3.0, vP.z)) : 1.0;
   vec3 col;
-  if (!wall && uHasTex > 0.5 && hasTex > 0.5) {
+  vec4 rs = texelFetch(uRoofStyle, ivec2(int(vBid + 0.5), 0), 0);
+  if (!wall && rs.a > 0.5) {
+    base = rs.rgb * (0.94 + 0.06 * step(0.5, fract(vP.z * 3.0)));
+    col = base * (amb + uSun * diff * 1.15 + vec3(0.05, 0.06, 0.09) * uNight);
+  } else if (!wall && uHasTex > 0.5 && hasTex > 0.5) {
     // Dach aus dem Luftbild: Licht und Schatten sind im Foto schon enthalten,
     // daher nur abgeschwächt beleuchten
     vec3 tex = texture(uRoofTex, vUv).rgb;
@@ -354,9 +359,8 @@ export function createBuildingLayer({ onProgress } = {}) {
     .catch((e) => console.warn('landmarks.json nicht geladen', e));
   // In Straßenfotos gemessene Fassadenfarben (tools/facades_mapillary.py): id -> [Farbe, Material, Bilder]
   let facades = new Map();
-  const facadesReady = fetch(v('data/facades.json')).then((r) => r.json())
-    .then((d) => { facades = new Map(Object.entries(d.gebaeude)); })
-    .catch(() => {});
+  // tools/facades_mapillary.py ist experimentell; data/facades.json wird derzeit nicht erzeugt
+  const facadesReady = Promise.resolve();
 
   const ready = Promise.all([landmarksReady, facadesReady]).then(() => fetch(v(DATA + 'index.json'))).then((r) => r.json()).then((d) => {
     index = d;
@@ -400,10 +404,15 @@ export function createBuildingLayer({ onProgress } = {}) {
     // Zeilen nur so viele, wie die Wahrzeichen dieser Kachel Teile haben (meist 1)
     const rows = Math.min(MAX_PARTS, Math.max(1, ...records.filter((r) => landmarks.has(r.id)).map((r) => (r.p || [0]).length)));
     const data = new Uint8Array(w * rows * 4);
+    const roof = new Uint8Array(w * 4); // a = 255: eigene Dachfarbe statt Luftbild
     records.forEach((rec, bid) => {
       const fa = facades.get(rec.id);
       const lm = landmarks.get(rec.id) || (fa && { wand: { farbe: fa[0], material: fa[1] }, gemessen: true });
       if (!lm) return;
+      if (lm.dach?.farbe) {
+        const [r, g, b] = hexRgb(lm.dach.farbe);
+        roof.set([r, g, b, 255], bid * 4);
+      }
       const heights = rec.p || [rec.h];
       for (let row = 0; row < rows; row++) {
         const h = heights[Math.min(row, heights.length - 1)] ?? rec.h;
@@ -419,7 +428,61 @@ export function createBuildingLayer({ onProgress } = {}) {
     const tex = new THREE.DataTexture(data, w, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
     tex.minFilter = tex.magFilter = THREE.NearestFilter;
     tex.needsUpdate = true;
-    return tex;
+    const roofTex = new THREE.DataTexture(roof, w, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    roofTex.minFilter = roofTex.magFilter = THREE.NearestFilter;
+    roofTex.needsUpdate = true;
+    return [tex, roofTex];
+  }
+
+  // Entzerrte Fassadenfotos (data/landmarks.json -> fotos), 5 cm vor der LoD2-Wand
+  const photoMeshes = [];
+  const photoMat = (tex) => new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: `
+      precision highp float;
+      uniform mat4 projectionMatrix; uniform mat4 modelViewMatrix;
+      in vec3 position; in vec2 uv; in vec3 normal;
+      out vec2 vUv; out vec3 vN;
+      void main() { vUv = uv; vN = normal; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      precision highp float;
+      uniform sampler2D uMap; uniform vec3 uSunDir; uniform vec3 uSun; uniform vec3 uSky; uniform vec3 uGround; uniform float uNight;
+      in vec2 vUv; in vec3 vN; out vec4 outColor;
+      void main() {
+        vec3 tex = texture(uMap, vUv).rgb;
+        float diff = max(dot(normalize(vN), uSunDir), 0.0);
+        vec3 amb = mix(uGround, uSky, 0.5);
+        // Licht steckt schon im Foto: nur leicht nachbeleuchten, nachts abdunkeln
+        outColor = vec4(tex * (amb * 0.6 + uSun * (0.55 + 0.35 * diff)) * 1.12, 1.0);
+      }`,
+    uniforms: { uMap: { value: tex }, uSunDir: uniforms.uSunDir, uSun: uniforms.uSun, uSky: uniforms.uSky, uGround: uniforms.uGround, uNight: uniforms.uNight },
+    side: THREE.DoubleSide,
+  });
+  function addFacadePhotos() {
+    for (const lm of landmarks.values()) {
+      if (!lm.fotos || lm.basis == null) continue;
+      const lift = (lm.basis - REF) * EXAG;
+      for (const f of lm.fotos) {
+        const pts = f.wand.map(([lng, lat, h, u, vv]) => {
+          const [x, y] = toLocal(lng, lat);
+          return { x, y, z: h + lift, u, v: vv };
+        });
+        const tris = THREE.ShapeUtils.triangulateShape(pts.map((p) => new THREE.Vector2(p.u, p.v)), []);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pts.flatMap((p) => [p.x, p.y, p.z]), 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(pts.flatMap((p) => [p.u, p.v]), 2));
+        geo.setAttribute('normal', new THREE.Float32BufferAttribute(pts.flatMap(() => [f.normale[0], f.normale[1], 0]), 3));
+        geo.setIndex(tris.flat());
+        const tex = texLoader.load(v(f.bild), () => map?.triggerRepaint());
+        tex.colorSpace = THREE.NoColorSpace;
+        tex.anisotropy = 8;
+        const mesh = new THREE.Mesh(geo, photoMat(tex));
+        mesh.frustumCulled = false;
+        mesh.visible = visible;
+        scene.add(mesh);
+        photoMeshes.push(mesh);
+      }
+    }
   }
 
   async function loadTile(t) {
@@ -476,7 +539,7 @@ export function createBuildingLayer({ onProgress } = {}) {
           uTile: { value: t.i },
           uRoofTex: { value: roofTex || emptyTex },
           uHasTex: { value: roofTex ? 1 : 0 },
-          uStyle: { value: styleTexture(records) },
+          ...(([st, rs]) => ({ uStyle: { value: st }, uRoofStyle: { value: rs } }))(styleTexture(records)),
         },
       });
       const mesh = new THREE.Mesh(geo, mat);
@@ -530,6 +593,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       await ready;
       map.on('moveend', update);
       update();
+      addFacadePhotos();
     },
     render(gl, matrix) {
       if (!o || !visible) return;
@@ -620,6 +684,7 @@ export function createBuildingLayer({ onProgress } = {}) {
       visible = v;
       for (const t of tiles.values()) if (t.mesh) t.mesh.visible = v;
       for (const m of treeMeshes) m.visible = v;
+      for (const m of photoMeshes) m.visible = v;
       map?.triggerRepaint();
     },
     get count() { return index ? index.tiles.reduce((s, t) => s + t.n, 0) : 0; },

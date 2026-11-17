@@ -1,41 +1,240 @@
 {
-  "hinweis": "Aussehen einzelner Gebäude. id = LoD2-Gebäude-ID des LGLN (im Info-Panel unter 'Gebäude-ID'). Materialien: klinker, putz, feldstein, holz, fachwerk. Fenster: keine, wohnhaus, kirche, kirchturm, lichtband. 'teile' gelten für Gebäudeteile ab der angegebenen Höhe in Metern.",
-  "gebaeude": [
+ "hinweis": "Aussehen einzelner Gebäude. id = LoD2-Gebäude-ID des LGLN (im Info-Panel unter 'Gebäude-ID'). Materialien: klinker, putz, feldstein, holz, fachwerk. Fenster: keine, wohnhaus, kirche, kirchturm, lichtband. 'teile' gelten für Gebäudeteile ab der angegebenen Höhe in Metern. 'fotos' sind entzerrte Fassadenfotos (tools/facade_photo.py), 'basis' die Geländehöhe des Gebäudes in m NHN. 'dach.farbe' ersetzt das Luftbild auf dem Dach (z. B. wenn Bäume darüber stehen).",
+ "gebaeude": [
+  {
+   "name": "Peter-und-Paul-Kirche",
+   "id": "DENILD8800004sAs",
+   "wand": {
+    "material": "feldstein",
+    "farbe": "#857c72"
+   },
+   "fenster": "kirche",
+   "teile": [
     {
-      "name": "Peter-und-Paul-Kirche",
-      "id": "DENILD8800004sAs",
-      "wand": { "material": "feldstein", "farbe": "#857c72" },
-      "fenster": "kirche",
-      "teile": [
-        { "abHoehe": 30, "wand": { "material": "klinker", "farbe": "#8f3c2b" }, "fenster": "kirchturm" }
-      ],
-      "quelle": "Wikipedia: Peter-und-Paul-Kirche (Schneverdingen) – Feldsteinbau von 1745/46, neugotischer Backsteinturm, fast 56 m"
-    },
-    {
-      "name": "Eine-Welt-Kirche",
-      "id": "DENILD8800004qY1",
-      "wand": { "material": "holz", "farbe": "#8a7a66" },
-      "fenster": "keine",
-      "teile": [
-        { "abHoehe": 16, "wand": { "material": "holz", "farbe": "#8d8c88" } }
-      ],
-      "quelle": "Wikipedia: Eine-Welt-Kirche – Holzbau zur Expo 2000, außen unbehandeltes Eichenholz in Brettstapelbauweise, Turmspitze aus grauen Kiefernstämmen"
-    },
-    {
-      "name": "Heimathaus De Theeshof",
-      "id": "DENILD8800008LIZ",
-      "wand": { "material": "fachwerk", "farbe": "#9a4632" },
-      "fenster": "wohnhaus",
-      "annahme": true,
-      "quelle": "Annahme: Fachwerk-Hallenhaus mit Klinkergefachen, wie bei historischen Heidehöfen üblich – bitte mit Foto prüfen"
-    },
-    {
-      "name": "Heimathaus De Theeshof (Nebengebäude)",
-      "id": "DENILD8800004rZj",
-      "wand": { "material": "fachwerk", "farbe": "#9a4632" },
-      "fenster": "keine",
-      "annahme": true,
-      "quelle": "Annahme wie oben – bitte mit Foto prüfen"
+     "abHoehe": 30,
+     "wand": {
+      "material": "klinker",
+      "farbe": "#8f3c2b"
+     },
+     "fenster": "kirchturm"
     }
-  ]
+   ],
+   "quelle": "Wikipedia: Peter-und-Paul-Kirche (Schneverdingen) – Feldsteinbau von 1745/46, neugotischer Backsteinturm, fast 56 m"
+  },
+  {
+   "name": "Eine-Welt-Kirche",
+   "id": "DENILD8800004qY1",
+   "wand": {
+    "material": "holz",
+    "farbe": "#8a7a66"
+   },
+   "fenster": "keine",
+   "teile": [
+    {
+     "abHoehe": 16,
+     "wand": {
+      "material": "holz",
+      "farbe": "#8d8c88"
+     }
+    }
+   ],
+   "quelle": "Wikipedia: Eine-Welt-Kirche – Holzbau zur Expo 2000, außen unbehandeltes Eichenholz in Brettstapelbauweise, Turmspitze aus grauen Kiefernstämmen"
+  },
+  {
+   "name": "Heimathaus De Theeshof",
+   "id": "DENILD8800008LIZ",
+   "wand": {
+    "material": "fachwerk",
+    "farbe": "#9a4632"
+   },
+   "fenster": "wohnhaus",
+   "annahme": true,
+   "quelle": "Annahme: Fachwerk-Hallenhaus mit Klinkergefachen, wie bei historischen Heidehöfen üblich – bitte mit Foto prüfen"
+  },
+  {
+   "name": "Heimathaus De Theeshof (Nebengebäude)",
+   "id": "DENILD8800004rZj",
+   "wand": {
+    "material": "fachwerk",
+    "farbe": "#9a4632"
+   },
+   "fenster": "keine",
+   "annahme": true,
+   "quelle": "Annahme wie oben – bitte mit Foto prüfen"
+  },
+  {
+   "name": "Eiscafé Venezia",
+   "id": "DENILD8800004qlI",
+   "wand": {
+    "material": "putz",
+    "farbe": "#e4e1d8"
+   },
+   "fenster": "keine",
+   "basis": 83.59,
+   "fotos": [
+    {
+     "bild": "data/fassaden/DENILD8800004qlI_2.jpg",
+     "wand": [
+      [
+       9.7852543,
+       53.11910299,
+       5.63,
+       0.0,
+       1.0
+      ],
+      [
+       9.78526725,
+       53.11907657,
+       5.63,
+       1.0,
+       1.0
+      ],
+      [
+       9.78526725,
+       53.11907657,
+       0.0,
+       1.0,
+       0.0
+      ],
+      [
+       9.7852543,
+       53.11910299,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "normale": [
+      0.956,
+      0.2934
+     ]
+    },
+    {
+     "bild": "data/fassaden/DENILD8800004qlI_3.jpg",
+     "wand": [
+      [
+       9.78522352,
+       53.11912617,
+       5.63,
+       0.0,
+       1.0
+      ],
+      [
+       9.78525417,
+       53.11910314,
+       5.63,
+       1.0,
+       1.0
+      ],
+      [
+       9.78525417,
+       53.11910314,
+       0.0,
+       1.0,
+       0.0
+      ],
+      [
+       9.78522352,
+       53.11912617,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "normale": [
+      0.7737,
+      0.6335
+     ]
+    },
+    {
+     "bild": "data/fassaden/DENILD8800004qlI_6.jpg",
+     "wand": [
+      [
+       9.78526583,
+       53.11904722,
+       5.63,
+       0.0,
+       1.0
+      ],
+      [
+       9.78525261,
+       53.11901792,
+       5.63,
+       1.0,
+       1.0
+      ],
+      [
+       9.78525261,
+       53.11901792,
+       0.0,
+       1.0,
+       0.0
+      ],
+      [
+       9.78526583,
+       53.11904722,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "normale": [
+      0.9679,
+      -0.2514
+     ]
+    },
+    {
+     "bild": "data/fassaden/DENILD8800004qlI_7.jpg",
+     "wand": [
+      [
+       9.78526728,
+       53.11907643,
+       5.63,
+       0.0,
+       1.0
+      ],
+      [
+       9.78526586,
+       53.11904732,
+       5.63,
+       1.0,
+       1.0
+      ],
+      [
+       9.78526586,
+       53.11904732,
+       0.0,
+       1.0,
+       0.0
+      ],
+      [
+       9.78526728,
+       53.11907643,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "normale": [
+      0.9998,
+      -0.0185
+     ]
+    }
+   ],
+   "quelle": "Fassaden aus einem Mapillary-Straßenfoto entzerrt – Bild 733462938068652, Foto: hotteliene (CC BY-SA 4.0) · Dach: dunkle Ziegel wie im Foto (das Luftbild zeigt dort Baumkronen)",
+   "dach": {
+    "farbe": "#4f3b32"
+   }
+  },
+  {
+   "name": "Klinkerhaus am Eiscafé",
+   "id": "DENILD8800004rV9",
+   "wand": {
+    "material": "klinker",
+    "farbe": "#8f4f3c"
+   },
+   "fenster": "wohnhaus",
+   "quelle": "Klinkerfarbe aus einem Mapillary-Straßenfoto gemessen (Bild 2541654312808873, Foto: tian, CC BY-SA 4.0)"
+  }
+ ]
 }
