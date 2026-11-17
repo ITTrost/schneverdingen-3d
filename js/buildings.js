@@ -352,8 +352,13 @@ export function createBuildingLayer({ onProgress } = {}) {
   const landmarksReady = fetch(v('data/landmarks.json')).then((r) => r.json())
     .then((d) => { landmarks = new Map(d.gebaeude.map((g) => [g.id, g])); })
     .catch((e) => console.warn('landmarks.json nicht geladen', e));
+  // In Straßenfotos gemessene Fassadenfarben (tools/facades_mapillary.py): id -> [Farbe, Material, Bilder]
+  let facades = new Map();
+  const facadesReady = fetch(v('data/facades.json')).then((r) => r.json())
+    .then((d) => { facades = new Map(Object.entries(d.gebaeude)); })
+    .catch(() => {});
 
-  const ready = landmarksReady.then(() => fetch(v(DATA + 'index.json'))).then((r) => r.json()).then((d) => {
+  const ready = Promise.all([landmarksReady, facadesReady]).then(() => fetch(v(DATA + 'index.json'))).then((r) => r.json()).then((d) => {
     index = d;
     index.tiles.forEach((t, i) => { t.i = i; });
     origin = d.origin;
@@ -396,7 +401,8 @@ export function createBuildingLayer({ onProgress } = {}) {
     const rows = Math.min(MAX_PARTS, Math.max(1, ...records.filter((r) => landmarks.has(r.id)).map((r) => (r.p || [0]).length)));
     const data = new Uint8Array(w * rows * 4);
     records.forEach((rec, bid) => {
-      const lm = landmarks.get(rec.id);
+      const fa = facades.get(rec.id);
+      const lm = landmarks.get(rec.id) || (fa && { wand: { farbe: fa[0], material: fa[1] }, gemessen: true });
       if (!lm) return;
       const heights = rec.p || [rec.h];
       for (let row = 0; row < rows; row++) {
@@ -608,6 +614,7 @@ export function createBuildingLayer({ onProgress } = {}) {
     },
     toLocal: (lng, lat) => toLocal(lng, lat),
     landmark: (id) => landmarks.get(id),
+    facade: (id) => facades.get(id),
     toLngLat: (x, y) => toLngLat(x, y),
     setVisible(v) {
       visible = v;

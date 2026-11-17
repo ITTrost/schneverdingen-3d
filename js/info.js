@@ -159,6 +159,7 @@ export function initInfo({ map, panel, body, closeBtn, onOpen, buildings }) {
         <div class="fact"><dt>Bahnhof</dt><dd>${formatDistance(dBahnhof)}</dd></div>
       </dl>
       ${rec && buildings?.landmark(rec.id) ? `<p class="hint" style="margin:-6px 0 10px"><strong>${escapeHtml(buildings.landmark(rec.id).name)}:</strong> ${escapeHtml(buildings.landmark(rec.id).quelle || '')}</p>` : ''}
+      ${rec && !buildings?.landmark(rec.id) && buildings?.facade(rec.id) ? `<p class="hint" style="margin:-6px 0 10px"><span style="display:inline-block;width:.9em;height:.9em;border-radius:3px;vertical-align:-1px;background:${escapeHtml(buildings.facade(rec.id)[0])}"></span> Fassade (${escapeHtml(buildings.facade(rec.id)[1] === 'klinker' ? 'Klinker' : 'Putz')}) gemessen in ${buildings.facade(rec.id)[2]} Straßenfoto${buildings.facade(rec.id)[2] === 1 ? '' : 's'} von Mapillary</p>` : ''}
       ${rec ? `<p class="hint" style="margin:-6px 0 10px">${escapeHtml(rec.r || 'Dachform unbekannt')}${rec.z != null ? ` · Gelände ${rec.z.toLocaleString('de-DE')} m ü. NN` : ''} · Daten: LGLN, 3D-Gebäudemodell LoD2 · Gebäude-ID <span style="user-select:all">${escapeHtml(rec.id)}</span></p>` : ''}
       ${levels ? `<p class="hint" style="margin:-6px 0 10px">Etwa ${levels} ${levels === 1 ? 'Geschoss' : 'Geschosse'} (geschätzt aus der Höhe)</p>` : ''}
       <div class="near"><p class="loading">Umgebung im Umkreis von ${RADIUS} m wird geladen …</p></div>`;
